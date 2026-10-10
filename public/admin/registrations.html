@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manage Registrations — ServeDeServe Admin</title>
+  <meta name="description" content="Manage and monitor event registrations, attendance records, and statuses.">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div id="app"></div>
+  <script src="/js/shared.js"></script>
+  <script>
+    if (!requireAdminAuth()) {
+      throw new Error('Access denied: Admin authentication required');
+    }
+
+    let allRegistrations = [];
+    let allEvents = [];
+
+    // Check URL params for preselected eventId
+    const urlParams = new URLSearchParams(window.location.search);
+    const preselectedEventId = urlParams.get('eventId') || 'all';
+
+    document.getElementById('app').innerHTML = `
+      <div class="admin-shell">
+        ${renderAdminSidebar('registrations')}
+        <main class="admin-content" id="main">
+          <div class="page-heading-row" style="margin-bottom:24px;">
+            <div>
+              <p class="eyebrow" style="color:var(--primary);font-weight:700;font-size:0.85rem;text-transform:uppercase;">Registration Records</p>
+              <h1 style="font-size:2rem;margin-bottom:6px;">Attendee Registrations</h1>
+              <p style="color:var(--muted);">Verify participants, update approval status, and manage registration records.</p>
+            </div>
+            <div style="display:flex;gap:12px;">
+              <button onclick="exportCSV()" class="button button--secondary">${icons.download} Export CSV</button>
+            </div>
+          </div>
+
+          <!-- Filters -->
+          <div class="filter-panel" style="margin-bottom:24px;">
+            <div class="field">
+              <label for="regSearch">Search Records</label>
+              <input type="text" id="regSearch" placeholder="Search by name, email, ref ID, or org..." oninput="filterRegistrations()">
+            </div>
+            <div class="field">
+              <label for="eventFilter">Filter by Event</label>
+              <select id="eventFilter" onchange="filterRegistrations()">
+                <option value="all">All Events</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="regStatusFilter">Status</label>
+              <select id="regStatusFilter" onchange="filterRegistrations()">
+                <option value="all">All Statuses</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="pending">Pending</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Ref ID</th>
+                  <th>Attendee</th>
+                  <th>Contact Info</th>
+                  <th>Event</th>
+                  <th>Registered Date</th>
+                  <th>Status</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody id="registrationsListBody">
+                <tr><td colspan="7" style="text-align:center;padding:32px;">Loading registrations...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </main>
+      </div>
+
+      <!-- Registration Detail Modal -->
+      <div id="detailModalBackdrop" class="scrim" onclick="closeModal()" style="display:none;"></div>
+      <aside id="detailModal" class="a11y-panel" role="dialog" aria-label="Registration Details" style="display:none;">
+        <div class="panel-heading">
+          <div><p class="eyebrow">Attendee Record</p><h2 id="modalTitle">Registration Details</h2></div>
+          <button class="icon-button" onclick="closeModal()">${icons.x}</button>
+        </div>
+        <div id="modalBody" style="margin-top:20px;"></div>
+      </aside>
+
+      ${renderA11yPanel()}
+    `;
+
+    async function loadData() {
+      // Load events for filter dropdown
+      const evRes = await api('/api/admin/events');
+      if (evRes.success && evRes.events) {
+        allEvents = evRes.events;
+        const select = document.getElementById('eventFilter');
+        allEvents.forEach(e => {
+          const opt = document.createElement('option');
+          opt.value = e.id;
+          opt.textContent = e.title;
+          if (e.id === preselectedEventId) opt.selected = true;
+          select.appendChild(opt);
+        });
+      }
+
+      // Load registrations
+      const regRes = await api('/api/admin/registrations');
+      if (regRes.success && regRes.registrations) {
+        allRegistrations = regRes.registrations;
+        filterRegistrations();
+      }
+    }
+
+    function renderRegistrationsTable(list) {
+      const tbody = document.getElementById('registrationsListBody');
+      if (list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted);">No matching registrations found.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = list.map(r => `
+        <tr>
+          <td><code style="font-weight:700;color:var(--primary);background:var(--very-light);padding:2px 6px;border-radius:4px;">${r.referenceId}</code></td>
+          <td>
+            <strong>${r.fullName || (r.firstName ? `${r.firstName} ${r.lastName || ''}`.trim() : 'Jane Doe')}</strong>
+            <span class="table-sub">${r.organization || r.department || 'Individual'} • ${r.role || 'Attendee'}</span>
+          </td>
+          <td>
+            <span>${r.email}</span>
+            <span class="table-sub">${r.phone}</span>
+          </td>
+          <td>
+            <strong>${r.eventTitle}</strong>
+            <span class="table-sub">${formatDateShort(r.eventDate)}</span>
+          </td>
+          <td>${formatDateShort(r.registeredAt)}</td>
+          <td>
+            <select onchange="updateRegStatus('${r.id}', this.value)" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border);font-size:0.85rem;font-weight:600;">
+              <option value="Confirmed" ${(r.status || '').toLowerCase() === 'confirmed' ? 'selected' : ''}>Confirmed</option>
+              <option value="Attended" ${(r.status || '').toLowerCase() === 'attended' ? 'selected' : ''}>Attended</option>
+              <option value="Pending" ${(r.status || '').toLowerCase() === 'pending' ? 'selected' : ''}>Pending</option>
+              <option value="Cancelled" ${(r.status || '').toLowerCase() === 'cancelled' ? 'selected' : ''}>Cancelled</option>
+            </select>
+          </td>
+          <td>
+            <button onclick="viewDetails('${r.id}')" class="table-action">${icons.eye} View</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function filterRegistrations() {
+      const q = (document.getElementById('regSearch')?.value || '').toLowerCase();
+      const evId = document.getElementById('eventFilter')?.value || 'all';
+      const stat = document.getElementById('regStatusFilter')?.value || 'all';
+
+      const filtered = allRegistrations.filter(r => {
+        const ref = (r.referenceId || '').toLowerCase();
+        const pName = (r.fullName || `${r.firstName || ''} ${r.lastName || ''}`).toLowerCase();
+        const email = (r.email || '').toLowerCase();
+        const org = (r.organization || r.department || '').toLowerCase();
+        const matchesQuery = !q || ref.includes(q) || pName.includes(q) || email.includes(q) || org.includes(q);
+        const matchesEvent = evId === 'all' || String(r.eventId) === String(evId);
+        const matchesStatus = stat === 'all' || (r.status || '').toLowerCase() === stat.toLowerCase();
+        return matchesQuery && matchesEvent && matchesStatus;
+      });
+
+      renderRegistrationsTable(filtered);
+    }
+
+    async function updateRegStatus(id, newStatus) {
+      const res = await api(`/api/admin/registrations/${id}/status`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (res.success) {
+        const item = allRegistrations.find(r => r.id === id);
+        if (item) item.status = newStatus;
+      }
+    }
+
+    function viewDetails(id) {
+      const r = allRegistrations.find(reg => reg.id === id);
+      if (!r) return;
+
+      const pName = r.fullName || `${r.firstName || ''} ${r.lastName || ''}`.trim() || 'Attendee';
+      document.getElementById('modalTitle').textContent = pName;
+      document.getElementById('modalBody').innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div>
+            <small style="color:var(--muted);text-transform:uppercase;font-size:0.75rem;font-weight:700;">Reference ID</small>
+            <p style="font-size:1.1rem;font-weight:700;color:var(--primary);margin:2px 0 0;">${r.referenceId}</p>
+          </div>
+          <div>
+            <small style="color:var(--muted);text-transform:uppercase;font-size:0.75rem;font-weight:700;">Registered Event</small>
+            <p style="font-weight:700;margin:2px 0 0;">${r.eventTitle || 'Community Event'}</p>
+          </div>
+          <div>
+            <small style="color:var(--muted);text-transform:uppercase;font-size:0.75rem;font-weight:700;">Contact Details</small>
+            <p style="margin:2px 0 0;">${r.email} ${r.phone ? '• ' + r.phone : ''}</p>
+          </div>
+          <div>
+            <small style="color:var(--muted);text-transform:uppercase;font-size:0.75rem;font-weight:700;">Organization &amp; Role</small>
+            <p style="margin:2px 0 0;">${r.organization || r.department || 'Individual'} (${r.role || 'Participant'})</p>
+          </div>
+          <div>
+            <small style="color:var(--muted);text-transform:uppercase;font-size:0.75rem;font-weight:700;">Registration Date</small>
+            <p style="margin:2px 0 0;">${formatDateShort(r.registeredAt)}</p>
+          </div>
+          <div>
+            <small style="color:var(--muted);text-transform:uppercase;font-size:0.75rem;font-weight:700;">Dietary Preference</small>
+            <p style="margin:2px 0 0;text-transform:capitalize;">${r.dietaryPreference || 'None specified'}</p>
+          </div>
+          <div>
+            <small style="color:var(--muted);text-transform:uppercase;font-size:0.75rem;font-weight:700;">Emergency Contact</small>
+            <p style="margin:2px 0 0;">${r.emergencyContact || 'None'} ${r.emergencyPhone ? '(' + r.emergencyPhone + ')' : ''}</p>
+          </div>
+          <div>
+            <small style="color:var(--muted);text-transform:uppercase;font-size:0.75rem;font-weight:700;">Accessibility Needs</small>
+            <p style="margin:2px 0 0;">${r.accessibilityNeeds || 'None reported'}</p>
+          </div>
+          <div>
+            <small style="color:var(--muted);text-transform:uppercase;font-size:0.75rem;font-weight:700;">Current Status</small>
+            <div style="margin-top:4px;">${renderStatus(r.status)}</div>
+          </div>
+        </div>
+      `;
+
+      const modal = document.getElementById('detailModal');
+      const backdrop = document.getElementById('detailModalBackdrop');
+      if (modal) modal.style.display = 'flex';
+      if (backdrop) backdrop.style.display = 'block';
+    }
+
+    function closeModal() {
+      const modal = document.getElementById('detailModal');
+      const backdrop = document.getElementById('detailModalBackdrop');
+      if (modal) modal.style.display = 'none';
+      if (backdrop) backdrop.style.display = 'none';
+    }
+
+    function exportCSV() {
+      if (allRegistrations.length === 0) return alert('No registrations to export');
+      const headers = ['Reference ID', 'First Name', 'Last Name', 'Email', 'Phone', 'Organization', 'Role', 'Event Title', 'Status', 'Registered Date'];
+      const rows = allRegistrations.map(r => [
+        r.referenceId,
+        `"${r.firstName || (r.fullName ? r.fullName.split(' ')[0] : '')}"`,
+        `"${r.lastName || (r.fullName ? r.fullName.split(' ').slice(1).join(' ') : '')}"`,
+        `"${r.email}"`,
+        `"${r.phone}"`,
+        `"${r.organization || ''}"`,
+        `"${r.role || ''}"`,
+        `"${r.eventTitle || ''}"`,
+        r.status,
+        r.registeredAt
+      ]);
+      const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement('a');
+      link.setAttribute('href', encodedUri);
+      link.setAttribute('download', `servedeserve_registrations_${new Date().toISOString().slice(0,10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    loadData();
+  </script>
+</body>
+</html>

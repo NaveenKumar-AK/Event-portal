@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create Event — ServeDeServe Admin</title>
+  <meta name="description" content="Create and publish a new event on ServeDeServe portal.">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="/js/shared.js"></script>
+  <script>
+    if (!requireAdminAuth()) {
+      throw new Error('Access denied: Admin authentication required');
+    }
+
+    document.getElementById('app').innerHTML = `
+      <div class="admin-shell">
+        ${renderAdminSidebar('create')}
+        <main class="admin-content" id="main">
+          <div class="page-heading-row" style="margin-bottom:24px;">
+            <div>
+              <p class="eyebrow" style="color:var(--primary);font-weight:700;font-size:0.85rem;text-transform:uppercase;">Administration</p>
+              <h1 style="font-size:2rem;margin-bottom:6px;">Create New Event</h1>
+              <p style="color:var(--muted);">Publish a campus or institutional event for public registration.</p>
+            </div>
+            <div>
+              <a href="/admin/events" class="button button--secondary">${icons.arrowRight} View All Events</a>
+            </div>
+          </div>
+
+          <div class="form-card" style="max-width:960px;margin:0 auto 60px;">
+            <div id="alertBox" style="display:none;padding:16px;border-radius:10px;margin-bottom:24px;font-weight:600;"></div>
+
+            <form onsubmit="handleCreateEvent(event)" id="createEventForm">
+              <!-- Section 1: Basic Information -->
+              <h2 style="font-size:1.3rem;margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--border);">1. Event Details</h2>
+              <div class="form-grid">
+                <div class="field" style="grid-column: 1 / -1;">
+                  <label for="title">Event Title <span style="color:var(--error);">*</span></label>
+                  <input type="text" id="title" required placeholder="e.g. National Robotics Symposium 2025">
+                </div>
+
+                <div class="field">
+                  <label for="category">Category <span style="color:var(--error);">*</span></label>
+                  <select id="category" required>
+                    <option value="">Select category...</option>
+                    <option value="Conference">Conference</option>
+                    <option value="Workshop">Workshop</option>
+                    <option value="Seminar">Seminar</option>
+                    <option value="Social">Social</option>
+                    <option value="Sports">Sports</option>
+                    <option value="Cultural">Cultural</option>
+                    <option value="Technical">Technical</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label for="capacity">Maximum Capacity (Seats) <span style="color:var(--error);">*</span></label>
+                  <input type="number" id="capacity" required min="1" placeholder="e.g. 250">
+                </div>
+
+                <div class="field" style="grid-column: 1 / -1;">
+                  <label for="description">Short Description <span style="color:var(--error);">*</span></label>
+                  <input type="text" id="description" required placeholder="A brief one-line summary for event listing cards">
+                </div>
+
+                <div class="field" style="grid-column: 1 / -1;">
+                  <label for="longDescription">Detailed Description <span style="color:var(--error);">*</span></label>
+                  <textarea id="longDescription" rows="5" required placeholder="Full information about the schedule, syllabus, requirements, speaker bios..."></textarea>
+                </div>
+              </div>
+
+              <!-- Section 2: Date, Time & Venue -->
+              <h2 style="font-size:1.3rem;margin:32px 0 16px;padding-bottom:8px;border-bottom:1px solid var(--border);">2. Schedule & Location</h2>
+              <div class="form-grid">
+                <div class="field">
+                  <label for="date">Start Date <span style="color:var(--error);">*</span></label>
+                  <input type="date" id="date" required>
+                </div>
+
+                <div class="field">
+                  <label for="endDate">End Date <span style="color:var(--error);">*</span></label>
+                  <input type="date" id="endDate" required>
+                </div>
+
+                <div class="field">
+                  <label for="time">Start Time <span style="color:var(--error);">*</span></label>
+                  <input type="text" id="time" required placeholder="e.g. 09:30 AM">
+                </div>
+
+                <div class="field">
+                  <label for="endTime">End Time <span style="color:var(--error);">*</span></label>
+                  <input type="text" id="endTime" required placeholder="e.g. 04:30 PM">
+                </div>
+
+                <div class="field">
+                  <label for="venue">Venue Name <span style="color:var(--error);">*</span></label>
+                  <input type="text" id="venue" required placeholder="e.g. APJ Abdul Kalam Auditorium, Block A">
+                </div>
+
+                <div class="field">
+                  <label for="city">City <span style="color:var(--error);">*</span></label>
+                  <input type="text" id="city" required placeholder="e.g. Chennai">
+                </div>
+
+                <div class="field" style="grid-column: 1 / -1;">
+                  <label for="address">Full Street Address <span style="color:var(--error);">*</span></label>
+                  <input type="text" id="address" required placeholder="e.g. University Campus, Sardar Patel Road, Guindy">
+                </div>
+
+                <div class="field" style="grid-column: 1 / -1; margin-top: 6px;">
+                  <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
+                    <div>
+                      <label style="margin:0;font-size:1rem;color:var(--text);font-weight:700;">
+                        Pin Event Location on Map <span style="color:var(--error);">*</span>
+                      </label>
+                      <span style="display:block;font-size:0.85rem;color:var(--text-2);margin-top:2px;">
+                        Click anywhere on the map or drag the pin to set the exact location for attendees.
+                      </span>
+                    </div>
+                    <div id="pinStatusBadge" style="display:inline-flex;align-items:center;gap:6px;background:#f3e8ff;color:var(--primary);font-size:0.85rem;font-weight:700;padding:6px 14px;border-radius:999px;">
+                      📍 Pinned: <span id="pinCoordsText">13.0827°, 80.2707°</span>
+                    </div>
+                  </div>
+
+                  <div id="locationPickerMap" style="height:360px;width:100%;border-radius:12px;border:1px solid var(--border);position:relative;z-index:1;background:#f8fafc;overflow:hidden;"></div>
+                  
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;flex-wrap:wrap;gap:8px;">
+                    <small style="color:var(--muted);font-size:0.82rem;">Click anywhere or drag marker. Attendees will see this exact pinned location.</small>
+                    <div style="display:flex;gap:8px;">
+                      <button type="button" class="button button--ghost" onclick="searchLocationOnMap()" style="padding:6px 12px;font-size:0.82rem;">
+                        🔍 Find Address on Map
+                      </button>
+                      <button type="button" class="button button--ghost" onclick="resetPinToCenter()" style="padding:6px 12px;font-size:0.82rem;">
+                        Reset Pin
+                      </button>
+                    </div>
+                  </div>
+
+                  <input type="hidden" id="pinnedLat" value="13.0827">
+                  <input type="hidden" id="pinnedLng" value="80.2707">
+                </div>
+
+                <div class="field">
+                  <label for="regDeadline">Registration Deadline <span style="color:var(--error);">*</span></label>
+                  <input type="date" id="regDeadline" required>
+                </div>
+
+                <div class="field">
+                  <label for="tags">Tags (Comma-separated)</label>
+                  <input type="text" id="tags" placeholder="e.g. Robotics, AI, Innovation">
+                </div>
+              </div>
+
+              <!-- Section 3: Host & Organizer Information -->
+              <h2 style="font-size:1.3rem;margin:32px 0 16px;padding-bottom:8px;border-bottom:1px solid var(--border);">3. Host & Contact Information</h2>
+              <div class="form-grid">
+                <div class="field">
+                  <label for="hostName">Host / Lead Organizer Name <span style="color:var(--error);">*</span></label>
+                  <input type="text" id="hostName" required placeholder="e.g. Dr. Rajesh Kumar">
+                </div>
+
+                <div class="field">
+                  <label for="hostRole">Role / Title <span style="color:var(--error);">*</span></label>
+                  <input type="text" id="hostRole" required placeholder="e.g. Head of Department">
+                </div>
+
+                <div class="field">
+                  <label for="hostDept">Department / Institution <span style="color:var(--error);">*</span></label>
+                  <input type="text" id="hostDept" required placeholder="e.g. Dept. of Electrical Engineering">
+                </div>
+
+                <div class="field">
+                  <label for="hostEmail">Official Email <span style="color:var(--error);">*</span></label>
+                  <input type="email" id="hostEmail" required placeholder="organizer@servedeserve.org">
+                </div>
+
+                <div class="field">
+                  <label for="hostPhone">Official Phone <span style="color:var(--error);">*</span></label>
+                  <input type="text" id="hostPhone" required placeholder="+91 98765 43210">
+                </div>
+
+                <div class="field">
+                  <label for="requirements">Attendee Requirements (Comma-separated)</label>
+                  <input type="text" id="requirements" placeholder="e.g. Valid Student ID, Laptop required">
+                </div>
+              </div>
+
+              <div class="form-actions" style="margin-top:36px;display:flex;justify-content:flex-end;gap:16px;">
+                <a href="/admin/events" class="button button--secondary">Cancel</a>
+                <button type="submit" class="button button--primary" id="submitBtn">${icons.check} Publish Event</button>
+              </div>
+            </form>
+          </div>
+        </main>
+      </div>
+      ${renderA11yPanel()}
+    `;
+
+    // ─── Leaflet Map Pin Picker Logic ───
+    let pickerMap = null;
+    let pickerMarker = null;
+
+    function initLocationPickerMap() {
+      const defaultLat = 13.0827;
+      const defaultLng = 80.2707;
+
+      if (typeof L === 'undefined') {
+        console.error('Leaflet library is not loaded');
+        return;
+      }
+
+      try {
+        pickerMap = L.map('locationPickerMap').setView([defaultLat, defaultLng], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; OpenStreetMap contributors',
+          maxZoom: 19
+        }).addTo(pickerMap);
+
+        pickerMarker = L.marker([defaultLat, defaultLng], {
+          draggable: true
+        }).addTo(pickerMap);
+
+        pickerMarker.bindPopup('<b>Event Location</b><br>Drag marker or click anywhere on the map to pin exact coordinates.').openPopup();
+
+        pickerMarker.on('dragend', function (e) {
+          const pos = e.target.getLatLng();
+          updatePinnedLocation(pos.lat, pos.lng);
+        });
+
+        pickerMap.on('click', function (e) {
+          const pos = e.latlng;
+          pickerMarker.setLatLng(pos);
+          updatePinnedLocation(pos.lat, pos.lng);
+        });
+
+        // Invalidate map size so tiles render smoothly
+        setTimeout(() => {
+          if (pickerMap) pickerMap.invalidateSize();
+        }, 200);
+      } catch (err) {
+        console.error('Failed to initialize Leaflet picker map:', err);
+      }
+    }
+
+    function updatePinnedLocation(lat, lng) {
+      const roundedLat = Number(lat.toFixed(6));
+      const roundedLng = Number(lng.toFixed(6));
+      const latInput = document.getElementById('pinnedLat');
+      const lngInput = document.getElementById('pinnedLng');
+      const textEl = document.getElementById('pinCoordsText');
+
+      if (latInput) latInput.value = roundedLat;
+      if (lngInput) lngInput.value = roundedLng;
+      if (textEl) textEl.textContent = `${roundedLat}°, ${roundedLng}°`;
+
+      if (pickerMarker) {
+        pickerMarker.setPopupContent(`<b>Pinned Event Location</b><br>Lat: ${roundedLat}<br>Lng: ${roundedLng}`).openPopup();
+      }
+    }
+
+    async function searchLocationOnMap() {
+      const venue = document.getElementById('venue')?.value || '';
+      const city = document.getElementById('city')?.value || '';
+      const address = document.getElementById('address')?.value || '';
+      const query = [venue, address, city].filter(Boolean).join(', ');
+
+      if (!query) {
+        alert('Please fill in the Venue, City, or Street Address first to search on the map.');
+        return;
+      }
+
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        if (data && data.length > 0) {
+          const lat = parseFloat(data[0].lat);
+          const lon = parseFloat(data[0].lon);
+          if (pickerMap && pickerMarker) {
+            pickerMap.setView([lat, lon], 15);
+            pickerMarker.setLatLng([lat, lon]);
+            updatePinnedLocation(lat, lon);
+          }
+        } else {
+          alert('Address not found automatically via geocoding. Please click on the map directly to drop your pin.');
+        }
+      } catch (e) {
+        alert('Geocoding search failed. Please click directly on the map to pin the location.');
+      }
+    }
+
+    function resetPinToCenter() {
+      const defaultLat = 13.0827;
+      const defaultLng = 80.2707;
+      if (pickerMap && pickerMarker) {
+        pickerMap.setView([defaultLat, defaultLng], 13);
+        pickerMarker.setLatLng([defaultLat, defaultLng]);
+        updatePinnedLocation(defaultLat, defaultLng);
+      }
+    }
+
+    // Initialize map immediately after DOM insertion
+    initLocationPickerMap();
+
+    async function handleCreateEvent(e) {
+      e.preventDefault();
+      const btn = document.getElementById('submitBtn');
+      const alertBox = document.getElementById('alertBox');
+      btn.disabled = true;
+      btn.innerHTML = 'Publishing...';
+      alertBox.style.display = 'none';
+
+      const tagsRaw = document.getElementById('tags').value;
+      const tags = tagsRaw ? tagsRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+
+      const reqRaw = document.getElementById('requirements').value;
+      const requirements = reqRaw ? reqRaw.split(',').map(s => s.trim()).filter(Boolean) : ['Valid ID proof'];
+
+      const payload = {
+        title: document.getElementById('title').value,
+        category: document.getElementById('category').value,
+        description: document.getElementById('description').value,
+        longDescription: document.getElementById('longDescription').value,
+        date: document.getElementById('date').value,
+        endDate: document.getElementById('endDate').value,
+        time: document.getElementById('time').value,
+        endTime: document.getElementById('endTime').value,
+        venue: document.getElementById('venue').value,
+        city: document.getElementById('city').value,
+        address: document.getElementById('address').value,
+        capacity: parseInt(document.getElementById('capacity').value, 10),
+        registrationDeadline: document.getElementById('regDeadline').value,
+        host: {
+          name: document.getElementById('hostName').value,
+          role: document.getElementById('hostRole').value,
+          department: document.getElementById('hostDept').value,
+          email: document.getElementById('hostEmail').value,
+          phone: document.getElementById('hostPhone').value
+        },
+        tags,
+        requirements,
+        coordinates: {
+          lat: parseFloat(document.getElementById('pinnedLat').value) || 13.0827,
+          lng: parseFloat(document.getElementById('pinnedLng').value) || 80.2707
+        }
+      };
+
+      const res = await api('/api/admin/events', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+
+      if (res.success) {
+        alertBox.style.display = 'block';
+        alertBox.style.background = '#f0fdf4';
+        alertBox.style.color = 'var(--success)';
+        alertBox.textContent = '🎉 Event created successfully! Redirecting to events list...';
+        setTimeout(() => {
+          window.location.href = '/admin/events';
+        }, 1500);
+      } else {
+        alertBox.style.display = 'block';
+        alertBox.style.background = '#fef2f2';
+        alertBox.style.color = 'var(--error)';
+        alertBox.textContent = res.message || 'Failed to create event. Please check inputs.';
+        btn.disabled = false;
+        btn.innerHTML = icons.check + ' Publish Event';
+      }
+    }
+  </script>
+</body>
+</html>

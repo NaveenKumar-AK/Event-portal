@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Institutional Administrator Portal — ServeDeServe</title>
+  <meta name="description" content="Secure administrative access for event managers and institutional administrators.">
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .admin-login-shell {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: radial-gradient(circle at 15% 15%, #f5f3ff 0%, #faf5ff 40%, #fdf4ff 100%);
+      padding: 32px 16px;
+    }
+    .admin-login-card {
+      width: min(100%, 480px);
+      background: #ffffff;
+      border: 1px solid #e9d5ff;
+      border-radius: 20px;
+      padding: 40px 36px;
+      box-shadow: 0 20px 40px -15px rgba(107, 33, 168, 0.15);
+      text-align: center;
+    }
+    .inst-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #f3e8ff;
+      color: var(--primary);
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+    .setup-banner {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 22px;
+      text-align: left;
+      font-size: 0.88rem;
+      color: #1e40af;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="/js/shared.js"></script>
+  <script>
+    let isSetupMode = false;
+
+    async function checkSetupStatus() {
+      try {
+        const res = await api('/api/admin/setup-status');
+        if (res.success && res.isSetupNeeded) {
+          isSetupMode = true;
+        }
+      } catch (e) {
+        console.warn('Status check failed:', e);
+      }
+      renderAdminLoginPage();
+    }
+
+    function toggleMode(setup) {
+      isSetupMode = setup;
+      renderAdminLoginPage();
+    }
+
+    function renderAdminLoginPage() {
+      document.getElementById('app').innerHTML = `
+        <div class="admin-login-shell">
+          <div class="admin-login-card">
+            <div class="login-icon" style="background:#ede9fe;color:var(--primary);margin:0 auto 16px;">
+              ${icons.lock}
+            </div>
+            <div class="inst-badge">
+              ${icons.shieldCheck} Institutional Access
+            </div>
+            
+            ${isSetupMode ? `
+              <h1 style="font-size:1.85rem;margin-bottom:6px;color:var(--text);">First-Time Admin Setup</h1>
+              <p style="color:var(--text-2);font-size:0.92rem;margin-bottom:18px;">
+                Create and register your administrator password. Your password will be securely encrypted with <strong>BCrypt</strong>.
+              </p>
+
+              <div class="setup-banner">
+                <strong>First-time access:</strong> Since no password was previously assigned, enter your administrator email and set your new secret password below.
+              </div>
+
+              <form onsubmit="handleAdminSetup(event)" autocomplete="off">
+                <div class="field" style="margin-bottom:14px;text-align:left;">
+                  <label for="setupEmail">Administrator Email <span style="color:var(--error);">*</span></label>
+                  <input type="email" id="setupEmail" required placeholder="admin@servedeserve.org" autocomplete="off">
+                </div>
+                <div class="field" style="margin-bottom:14px;text-align:left;">
+                  <label for="setupName">Administrator Name <span style="font-weight:400;color:var(--muted);">(Optional)</span></label>
+                  <input type="text" id="setupName" placeholder="e.g. Lead Coordinator" autocomplete="off">
+                </div>
+                <div class="field" style="margin-bottom:14px;text-align:left;">
+                  <label for="setupPassword">Create Master Password <span style="color:var(--error);">*</span></label>
+                  <input type="password" id="setupPassword" required minlength="6" placeholder="At least 6 characters" autocomplete="new-password">
+                </div>
+                <div class="field" style="margin-bottom:22px;text-align:left;">
+                  <label for="setupConfirm">Confirm Password <span style="color:var(--error);">*</span></label>
+                  <input type="password" id="setupConfirm" required minlength="6" placeholder="Re-enter password" autocomplete="new-password">
+                </div>
+
+                <button type="submit" class="button button--primary" id="setupBtn" style="width:100%;font-size:1.05rem;">
+                  ${icons.check} Set Password &amp; Enter Admin Portal
+                </button>
+              </form>
+
+              <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">
+                <button type="button" class="text-link" onclick="toggleMode(false)" style="background:none;border:none;cursor:pointer;color:var(--primary);font-weight:700;font-size:0.9rem;">
+                  Already have a password? Sign in instead →
+                </button>
+              </div>
+            ` : `
+              <div style="background:#f3e8ff;border:1px solid #d8b4fe;border-radius:12px;padding:12px 16px;margin-bottom:20px;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:10px;">
+                <div>
+                  <strong style="color:var(--primary);font-size:0.88rem;display:block;">Pre-seeded Administrator Credentials:</strong>
+                  <span style="font-size:0.84rem;color:var(--text-2);">admin@servedeserve.org · admin123</span>
+                </div>
+                <button type="button" onclick="fillDemoAndSubmit()" class="button button--secondary" style="font-size:0.8rem;padding:6px 14px;white-space:nowrap;font-weight:700;background:#fff;color:var(--primary);border-color:#c084fc;">
+                  ⚡ Auto Sign In
+                </button>
+              </div>
+
+              <form onsubmit="handleAdminLogin(event)" id="loginForm" autocomplete="off">
+                <div class="field" style="margin-bottom:14px;text-align:left;">
+                  <label for="loginEmail">Administrator Email <span style="color:var(--error);">*</span></label>
+                  <input type="email" id="loginEmail" required placeholder="admin@servedeserve.org" value="admin@servedeserve.org" autocomplete="off">
+                </div>
+                <div class="field" style="margin-bottom:20px;text-align:left;">
+                  <label for="loginPassword">Password <span style="color:var(--error);">*</span></label>
+                  <input type="password" id="loginPassword" required placeholder="admin123" value="admin123" autocomplete="current-password">
+                </div>
+
+                <button type="submit" class="button button--primary" id="loginBtn" style="width:100%;font-size:1.05rem;">
+                  ${icons.lock} Sign In as Administrator
+                </button>
+              </form>
+
+              <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                <button type="button" class="text-link" onclick="toggleMode(true)" style="background:none;border:none;cursor:pointer;color:var(--primary);font-weight:700;font-size:0.88rem;">
+                  First time? Set administrator password →
+                </button>
+              </div>
+            `}
+
+            <div id="alertBox" style="display:none;padding:12px;border-radius:8px;margin-top:16px;font-size:0.9rem;text-align:left;"></div>
+
+            <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);text-align:center;">
+              <a href="/login" class="text-link" style="color:var(--muted);font-size:0.85rem;text-decoration:none;">
+                ← Return to Public User Portal
+              </a>
+            </div>
+          </div>
+        </div>
+        ${renderA11yPanel()}
+      `;
+    }
+
+    async function handleAdminSetup(e) {
+      e.preventDefault();
+      const btn = document.getElementById('setupBtn');
+      const alertBox = document.getElementById('alertBox');
+      const email = document.getElementById('setupEmail').value.trim();
+      const name = document.getElementById('setupName').value.trim() || 'Institutional Administrator';
+      const password = document.getElementById('setupPassword').value;
+      const confirm = document.getElementById('setupConfirm').value;
+
+      if (password !== confirm) {
+        alertBox.style.display = 'block';
+        alertBox.style.background = '#fef2f2';
+        alertBox.style.color = 'var(--error)';
+        alertBox.textContent = 'Passwords do not match. Please verify and try again.';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = 'Encrypting with BCrypt &amp; saving...';
+      alertBox.style.display = 'none';
+
+      const res = await api('/api/admin/setup', {
+        method: 'POST',
+        body: JSON.stringify({ email, password, name })
+      });
+
+      if (res.success && res.token) {
+        sessionStorage.setItem('adminToken', res.token);
+        sessionStorage.setItem('adminUser', JSON.stringify(res.user));
+        sessionStorage.setItem('sds-active-role', 'admin');
+        alertBox.style.display = 'block';
+        alertBox.style.background = '#f0fdf4';
+        alertBox.style.color = 'var(--success)';
+        alertBox.textContent = '🎉 Administrator password successfully created! Loading dashboard...';
+        setTimeout(() => {
+          window.location.href = '/admin';
+        }, 1200);
+      } else {
+        alertBox.style.display = 'block';
+        alertBox.style.background = '#fef2f2';
+        alertBox.style.color = 'var(--error)';
+        alertBox.textContent = res.message || 'Setup failed. Please check inputs.';
+        btn.disabled = false;
+        btn.innerHTML = icons.check + ' Set Password & Enter Admin Portal';
+      }
+    }
+
+    async function handleAdminLogin(e) {
+      e.preventDefault();
+      const btn = document.getElementById('loginBtn');
+      const alertBox = document.getElementById('alertBox');
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value;
+
+      btn.disabled = true;
+      btn.innerHTML = 'Verifying password with BCrypt...';
+      alertBox.style.display = 'none';
+
+      const res = await api('/api/admin/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password })
+      });
+
+      if (res.success && res.token) {
+        sessionStorage.setItem('adminToken', res.token);
+        sessionStorage.setItem('adminUser', JSON.stringify(res.user));
+        sessionStorage.setItem('sds-active-role', 'admin');
+        window.location.href = '/admin';
+      } else {
+        alertBox.style.display = 'block';
+        alertBox.style.background = '#fef2f2';
+        alertBox.style.color = 'var(--error)';
+        alertBox.textContent = res.message || 'Invalid email or password.';
+        btn.disabled = false;
+        btn.innerHTML = icons.lock + ' Sign In as Administrator';
+      }
+    }
+
+    function fillDemoAndSubmit() {
+      const emailInput = document.getElementById('loginEmail');
+      const passInput = document.getElementById('loginPassword');
+      if (emailInput) emailInput.value = 'admin@servedeserve.org';
+      if (passInput) passInput.value = 'admin123';
+      const form = document.getElementById('loginForm');
+      if (form) {
+        if (typeof form.requestSubmit === 'function') {
+          form.requestSubmit();
+        } else {
+          handleAdminLogin(new Event('submit'));
+        }
+      }
+    }
+
+    checkSetupStatus();
+  </script>
+</body>
+</html>

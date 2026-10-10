@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manage Events, Gallery &amp; Feedback — ServeDeServe Admin</title>
+  <meta name="description" content="Manage all events, upload photo galleries, configure feedback forms, and update event schedules.">
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .action-btn-group {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .badge-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      border: 1px solid var(--border);
+      background: #fff;
+      cursor: pointer;
+      color: var(--text-2);
+      transition: all 0.15s;
+    }
+    .badge-btn:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+      background: var(--very-light);
+    }
+    .badge-btn.active {
+      background: #f0fdf4;
+      border-color: #86efac;
+      color: #15803d;
+    }
+    .badge-btn.inactive {
+      background: #fef2f2;
+      border-color: #fecaca;
+      color: #b91c1c;
+    }
+    .gallery-preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 14px;
+      margin: 16px 0;
+    }
+    .gallery-preview-card {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      background: #fff;
+      position: relative;
+    }
+    .gallery-preview-card img {
+      width: 100%;
+      height: 120px;
+      object-fit: cover;
+    }
+    .gallery-preview-card p {
+      padding: 8px 10px;
+      font-size: 0.8rem;
+      margin: 0;
+      line-height: 1.35;
+      color: var(--text-2);
+    }
+    .gallery-preview-card button.del-btn {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      background: rgba(220, 38, 38, 0.9);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 4px 6px;
+      cursor: pointer;
+    }
+    .preset-pill {
+      font-size: 0.8rem;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px dashed var(--primary);
+      background: var(--very-light);
+      color: var(--primary);
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .preset-pill:hover {
+      background: var(--primary);
+      color: #fff;
+    }
+    .feedback-q-card {
+      background: var(--very-light);
+      border: 1px solid #ddd6fe;
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+    .feedback-response-card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="/js/shared.js"></script>
+  <script>
+    if (!requireAdminAuth()) {
+      throw new Error('Access denied: Admin authentication required');
+    }
+
+    let allEvents = [];
+    let activeModalEventId = null;
+
+    document.getElementById('app').innerHTML = `
+      <div class="admin-shell">
+        ${renderAdminSidebar('events')}
+        <main class="admin-content" id="main">
+          <div class="page-heading-row" style="margin-bottom:24px;">
+            <div>
+              <p class="eyebrow" style="color:var(--primary);font-weight:700;font-size:0.85rem;text-transform:uppercase;">Events Catalog &amp; Post-Event Tools</p>
+              <h1 style="font-size:2rem;margin-bottom:6px;">Event Management</h1>
+              <p style="color:var(--muted);">Add, edit, or delete events. Manage post-event photo galleries and attendee feedback forms.</p>
+            </div>
+            <div style="display:flex;gap:12px;">
+              <a href="/admin/events/create" class="button button--primary">${icons.plus} Create Event</a>
+            </div>
+          </div>
+
+          <!-- Filters -->
+          <div class="filter-panel" style="margin-bottom:24px;">
+            <div class="field">
+              <label for="eventSearch">Search Events</label>
+              <input type="text" id="eventSearch" placeholder="Filter by event title, venue, or host..." oninput="filterEvents()">
+            </div>
+            <div class="field">
+              <label for="categoryFilter">Category</label>
+              <select id="categoryFilter" onchange="filterEvents()">
+                <option value="all">All Categories</option>
+                <option value="Conference">Conference</option>
+                <option value="Workshop">Workshop</option>
+                <option value="Seminar">Seminar</option>
+                <option value="Community">Community</option>
+                <option value="Recreation">Recreation</option>
+                <option value="Sports">Sports</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="statusFilter">Status</label>
+              <select id="statusFilter" onchange="filterEvents()">
+                <option value="all">All Statuses</option>
+                <option value="upcoming">Upcoming</option>
+                <option value="ongoing">Ongoing</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Event Title &amp; Host</th>
+                  <th>Category</th>
+                  <th>Date &amp; Time</th>
+                  <th>Venue</th>
+                  <th>Status</th>
+                  <th>Photo Gallery</th>
+                  <th>Feedback Form</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="eventsListBody">
+                <tr><td colspan="8" style="text-align:center;padding:32px;">Loading events...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </main>
+      </div>
+      ${renderA11yPanel()}
+
+      <!-- Gallery Modal -->
+      <div class="modal-backdrop" id="galleryModal" style="display:none;" role="presentation">
+        <section class="modal-dialog modal-dialog--lg" role="dialog" aria-modal="true" aria-labelledby="galleryModalTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow" id="galleryEventSub">Event Gallery</p>
+              <h2 id="galleryModalTitle">Manage Event Photos</h2>
+            </div>
+            <button class="icon-button" onclick="closeGalleryModal()" aria-label="Close modal">
+              ${icons.x}
+            </button>
+          </div>
+
+          <div style="margin:16px 0;padding:12px;background:var(--very-light);border-radius:10px;border-left:4px solid var(--primary);">
+            <strong style="color:var(--primary);display:block;margin-bottom:2px;">User-Side Reflection:</strong>
+            <span style="font-size:0.9rem;color:var(--text-2);">
+              Photos added here will appear in the public <strong>User Gallery</strong> with slide-by-slide interactive carousel, showing this event’s title and date.
+            </span>
+          </div>
+
+          <h3 style="font-size:1.1rem;margin-top:20px;">Current Gallery Photos (<span id="galleryCountLabel">0</span>)</h3>
+          <div class="gallery-preview-grid" id="galleryGridArea">
+            <!-- Dynamically injected -->
+          </div>
+
+          <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:18px;">
+            <h3 style="font-size:1.15rem;margin-bottom:8px;">Add Photo to Event</h3>
+            
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center;">
+              <span style="font-size:0.85rem;color:var(--muted);font-weight:700;">Quick Presets:</span>
+              <button type="button" class="preset-pill" onclick="applyPhotoPreset('https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&w=1200&q=80', 'Participants practicing with digital tools')">+ Workshop Photo</button>
+              <button type="button" class="preset-pill" onclick="applyPhotoPreset('https://images.unsplash.com/photo-1577495508048-b635879837f1?auto=format&fit=crop&w=1200&q=80', 'Audience engagement in Civic Hall')">+ Forum Photo</button>
+              <button type="button" class="preset-pill" onclick="applyPhotoPreset('https://images.unsplash.com/photo-1517649763962-0c623266ddc0?auto=format&fit=crop&w=1200&q=80', 'Coaches assisting wheelchair participants')">+ Adaptive Sports Photo</button>
+              <button type="button" class="preset-pill" onclick="applyPhotoPreset('https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?auto=format&fit=crop&w=1200&q=80', 'Group commemorative portrait at event conclusion')">+ Group Photo</button>
+            </div>
+
+            <form onsubmit="handleAddPhoto(event)" style="display:grid;gap:12px;">
+              <div class="field">
+                <label for="newPhotoUrl">Image URL</label>
+                <input type="url" id="newPhotoUrl" required placeholder="https://images.unsplash.com/photo-...">
+              </div>
+              <div class="field">
+                <label for="newPhotoCaption">Photo Caption / Description</label>
+                <input type="text" id="newPhotoCaption" required placeholder="Describe what is taking place in this moment...">
+              </div>
+              <div style="display:flex;justify-content:flex-end;gap:10px;">
+                <button type="button" class="button button--secondary" onclick="closeGalleryModal()">Done</button>
+                <button type="submit" class="button button--primary">${icons.plus} Upload Photo to Gallery</button>
+              </div>
+            </form>
+          </div>
+        </section>
+      </div>
+
+      <!-- Feedback Modal -->
+      <div class="modal-backdrop" id="feedbackModal" style="display:none;" role="presentation">
+        <section class="modal-dialog modal-dialog--lg" role="dialog" aria-modal="true" aria-labelledby="fbModalTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow" id="fbEventSub">Post-Event Feedback</p>
+              <h2 id="fbModalTitle">Feedback Form Configuration</h2>
+            </div>
+            <button class="icon-button" onclick="closeFeedbackModal()" aria-label="Close modal">
+              ${icons.x}
+            </button>
+          </div>
+
+          <!-- Activation Toggle Banner -->
+          <div style="margin:20px 0;padding:16px 20px;background:var(--very-light);border:1px solid #ddd6fe;border-radius:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;">
+            <div>
+              <strong style="font-size:1.1rem;display:block;">Feedback Status for Attendees</strong>
+              <span style="font-size:0.9rem;color:var(--text-2);">
+                Activate this form once the event has concluded so participants can submit ratings and responses.
+              </span>
+            </div>
+            <div>
+              <button type="button" id="toggleFbActiveBtn" onclick="handleToggleFeedbackActive()" class="badge-btn" style="padding:10px 18px;font-size:0.95rem;">
+                <!-- Updated dynamically -->
+              </button>
+            </div>
+          </div>
+
+          <!-- Tab Navigation -->
+          <div class="tabs" style="margin-bottom:18px;">
+            <button type="button" class="active" id="tabFbQuestionsBtn" onclick="switchFbTab('questions')">Feedback Questions</button>
+            <button type="button" id="tabFbResponsesBtn" onclick="switchFbTab('responses')">Attendee Responses (<span id="fbRespCountBadge">0</span>)</button>
+          </div>
+
+          <!-- Tab 1: Questions -->
+          <div id="fbTabQuestions">
+            <div id="fbQuestionsList">
+              <!-- Dynamically rendered -->
+            </div>
+
+            <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:18px;">
+              <h3 style="font-size:1.1rem;margin-bottom:10px;">Add New Question</h3>
+              <form onsubmit="handleAddFbQuestion(event)" style="display:grid;gap:12px;">
+                <div class="field">
+                  <label for="newFbQuestionText">Question Prompt</label>
+                  <input type="text" id="newFbQuestionText" required placeholder="e.g. How accessible did you find the event venue and restrooms?">
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                  <div class="field">
+                    <label for="newFbQuestionType">Response Type</label>
+                    <select id="newFbQuestionType">
+                      <option value="rating">1 to 5 Star Rating</option>
+                      <option value="text">Written Comments / Text</option>
+                      <option value="choice">Multiple Choice (Satisfied / Neutral / Dissatisfied)</option>
+                    </select>
+                  </div>
+                  <div class="field" style="align-self:end;">
+                    <button type="submit" class="button button--primary" style="width:100%;">${icons.plus} Add Question</button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- Tab 2: Responses -->
+          <div id="fbTabResponses" style="display:none;">
+            <div id="fbResponsesArea">
+              <!-- Dynamically rendered -->
+            </div>
+          </div>
+
+          <div style="margin-top:24px;display:flex;justify-content:flex-end;">
+            <button type="button" class="button button--secondary" onclick="closeFeedbackModal()">Close</button>
+          </div>
+        </section>
+      </div>
+    `;
+
+    async function loadEvents() {
+      const res = await api('/api/admin/events');
+      if (res.success && res.events) {
+        allEvents = res.events;
+        renderEventsTable(allEvents);
+      }
+    }
+
+    function renderEventsTable(events) {
+      const tbody = document.getElementById('eventsListBody');
+      if (events.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted);">No matching events found.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = events.map(e => {
+        const photoCount = e.gallery ? e.gallery.length : 0;
+        const isFbActive = Boolean(e.feedbackActive);
+        const respCount = e.feedbackResponses ? e.feedbackResponses.length : 0;
+
+        return `
+          <tr>
+            <td>
+              <strong>${e.title}</strong>
+              <span class="table-sub">${typeof e.host === 'object' ? (e.host.name || 'Organizer') : (e.host || 'Organizer')}</span>
+            </td>
+            <td><span style="font-weight:700;font-size:0.85rem;color:var(--primary);">${e.category}</span></td>
+            <td>
+              <strong>${formatDateShort(e.date)}</strong>
+              <span class="table-sub">${e.time || (e.startTime + ' – ' + e.endTime)}</span>
+            </td>
+            <td>
+              <span>${e.venue || e.location}</span>
+              <span class="table-sub">${e.city || 'Central District'}</span>
+            </td>
+            <td>
+              <select onchange="updateEventStatus('${e.id}', this.value)" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border);font-size:0.85rem;font-weight:600;">
+                <option value="upcoming" ${e.status === 'upcoming' ? 'selected' : ''}>Upcoming</option>
+                <option value="ongoing" ${e.status === 'ongoing' ? 'selected' : ''}>Ongoing</option>
+                <option value="completed" ${e.status === 'completed' ? 'selected' : ''}>Completed</option>
+                <option value="cancelled" ${e.status === 'cancelled' ? 'selected' : ''}>Cancelled</option>
+              </select>
+            </td>
+            <td>
+              <button type="button" class="badge-btn" onclick="openGalleryModal(${e.id})" title="Manage Gallery Photos">
+                📷 Photos (${photoCount})
+              </button>
+            </td>
+            <td>
+              <button type="button" class="badge-btn ${isFbActive ? 'active' : 'inactive'}" onclick="openFeedbackModal(${e.id})" title="Configure Feedback Form">
+                ⭐ ${isFbActive ? 'Active (' + respCount + ')' : 'Inactive'}
+              </button>
+            </td>
+            <td>
+              <div class="action-btn-group">
+                <a href="/events/${e.id}" class="table-action" target="_blank" title="View Public User Page">${icons.eye}</a>
+                <a href="/admin/registrations?eventId=${e.id}" class="table-action" title="View Registrations" style="color:var(--secondary);">${icons.users}</a>
+                <button type="button" class="table-action" onclick="handleDeleteEvent(${e.id}, '${e.title.replace(/'/g, "\\'")}')" title="Delete Event" style="color:var(--error);background:none;border:none;cursor:pointer;">
+                  ${icons.trash}
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function filterEvents() {
+      const q = document.getElementById('eventSearch').value.toLowerCase();
+      const cat = document.getElementById('categoryFilter').value;
+      const stat = document.getElementById('statusFilter').value;
+
+      const filtered = allEvents.filter(e => {
+        const matchesQuery = !q || e.title.toLowerCase().includes(q) || (e.venue && e.venue.toLowerCase().includes(q)) || (e.host?.name && e.host.name.toLowerCase().includes(q));
+        const matchesCategory = cat === 'all' || e.category === cat;
+        const matchesStatus = stat === 'all' || e.status === stat;
+        return matchesQuery && matchesCategory && matchesStatus;
+      });
+
+      renderEventsTable(filtered);
+    }
+
+    async function updateEventStatus(id, newStatus) {
+      const res = await api(`/api/admin/events/${id}/status`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (res.success) {
+        const ev = allEvents.find(e => String(e.id) === String(id));
+        if (ev) ev.status = newStatus;
+        showToast(`Event status updated to ${newStatus}`, icons.circleCheck);
+      }
+    }
+
+    async function handleDeleteEvent(id, title) {
+      if (!confirm(`Are you sure you want to permanently delete "${title}"? This cannot be undone.`)) return;
+
+      const res = await api(`/api/admin/events/${id}`, { method: 'DELETE' });
+      if (res.success) {
+        allEvents = allEvents.filter(e => String(e.id) !== String(id));
+        renderEventsTable(allEvents);
+        showToast('Event deleted successfully.', icons.trash);
+      } else {
+        alert(res.message || 'Error deleting event');
+      }
+    }
+
+    // ─── GALLERY MODAL ───
+    function openGalleryModal(eventId) {
+      const ev = allEvents.find(e => String(e.id) === String(eventId));
+      if (!ev) return;
+      activeModalEventId = eventId;
+
+      document.getElementById('galleryEventSub').textContent = `${ev.title} · ${formatDateShort(ev.date)}`;
+      renderGalleryModalPhotos(ev);
+      document.getElementById('galleryModal').style.display = 'grid';
+    }
+
+    function closeGalleryModal() {
+      document.getElementById('galleryModal').style.display = 'none';
+      activeModalEventId = null;
+    }
+
+    function renderGalleryModalPhotos(ev) {
+      const photos = ev.gallery || [];
+      document.getElementById('galleryCountLabel').textContent = photos.length;
+      const container = document.getElementById('galleryGridArea');
+
+      if (photos.length === 0) {
+        container.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:24px;color:var(--muted);background:var(--very-light);border-radius:10px;">No photos uploaded yet. Add photos below to showcase this completed event!</div>`;
+        return;
+      }
+
+      container.innerHTML = photos.map(p => `
+        <div class="gallery-preview-card">
+          <img src="${p.url}" alt="${p.alt || p.caption}">
+          <button type="button" class="del-btn" onclick="handleDeletePhoto('${p.id}')" title="Delete Photo">${icons.trash}</button>
+          <p>${p.caption || 'Event photo'}</p>
+        </div>
+      `).join('');
+    }
+
+    function applyPhotoPreset(url, caption) {
+      document.getElementById('newPhotoUrl').value = url;
+      document.getElementById('newPhotoCaption').value = caption;
+    }
+
+    async function handleAddPhoto(e) {
+      e.preventDefault();
+      const url = document.getElementById('newPhotoUrl').value;
+      const caption = document.getElementById('newPhotoCaption').value;
+
+      const res = await api(`/api/admin/events/${activeModalEventId}/gallery`, {
+        method: 'POST',
+        body: JSON.stringify({ url, caption })
+      });
+
+      if (res.success) {
+        const ev = allEvents.find(item => String(item.id) === String(activeModalEventId));
+        if (ev) {
+          ev.gallery = res.gallery;
+          renderGalleryModalPhotos(ev);
+          renderEventsTable(allEvents);
+        }
+        document.getElementById('newPhotoUrl').value = '';
+        document.getElementById('newPhotoCaption').value = '';
+        showToast('Photo added to event gallery!', icons.circleCheck);
+      }
+    }
+
+    async function handleDeletePhoto(photoId) {
+      if (!confirm('Remove this photo from the event gallery?')) return;
+      const res = await api(`/api/admin/events/${activeModalEventId}/gallery/${photoId}`, { method: 'DELETE' });
+      if (res.success) {
+        const ev = allEvents.find(item => String(item.id) === String(activeModalEventId));
+        if (ev) {
+          ev.gallery = res.gallery;
+          renderGalleryModalPhotos(ev);
+          renderEventsTable(allEvents);
+        }
+        showToast('Photo removed.', icons.circleCheck);
+      }
+    }
+
+    // ─── FEEDBACK MODAL ───
+    async function openFeedbackModal(eventId) {
+      activeModalEventId = eventId;
+      const ev = allEvents.find(e => String(e.id) === String(eventId));
+      if (!ev) return;
+
+      document.getElementById('fbEventSub').textContent = `${ev.title} · ${formatDateShort(ev.date)}`;
+
+      // Fetch fresh feedback data
+      const res = await api(`/api/admin/events/${eventId}/feedback`);
+      if (res.success) {
+        ev.feedbackActive = res.feedbackActive;
+        ev.feedbackQuestions = res.questions;
+        ev.feedbackResponses = res.responses;
+      }
+
+      updateFeedbackToggleBtn(ev.feedbackActive);
+      renderFeedbackQuestions(ev.feedbackQuestions || []);
+      renderFeedbackResponses(ev.feedbackResponses || []);
+      switchFbTab('questions');
+
+      document.getElementById('feedbackModal').style.display = 'grid';
+    }
+
+    function closeFeedbackModal() {
+      document.getElementById('feedbackModal').style.display = 'none';
+      activeModalEventId = null;
+    }
+
+    function updateFeedbackToggleBtn(isActive) {
+      const btn = document.getElementById('toggleFbActiveBtn');
+      if (isActive) {
+        btn.className = 'badge-btn active';
+        btn.innerHTML = `${icons.circleCheck} Feedback ACTIVE (Visible to Users)`;
+      } else {
+        btn.className = 'badge-btn inactive';
+        btn.innerHTML = `Activate Feedback Form for Users`;
+      }
+    }
+
+    async function handleToggleFeedbackActive() {
+      const ev = allEvents.find(e => String(e.id) === String(activeModalEventId));
+      if (!ev) return;
+
+      const nextState = !ev.feedbackActive;
+      const res = await api(`/api/admin/events/${activeModalEventId}/feedback/toggle`, {
+        method: 'POST',
+        body: JSON.stringify({ active: nextState })
+      });
+
+      if (res.success) {
+        ev.feedbackActive = res.feedbackActive;
+        updateFeedbackToggleBtn(ev.feedbackActive);
+        renderEventsTable(allEvents);
+        showToast(ev.feedbackActive ? 'Feedback activated! Now visible on user side.' : 'Feedback deactivated.', icons.circleCheck);
+      }
+    }
+
+    function switchFbTab(tab) {
+      const qTab = document.getElementById('fbTabQuestions');
+      const rTab = document.getElementById('fbTabResponses');
+      const qBtn = document.getElementById('tabFbQuestionsBtn');
+      const rBtn = document.getElementById('tabFbResponsesBtn');
+
+      if (tab === 'questions') {
+        qTab.style.display = 'block';
+        rTab.style.display = 'none';
+        qBtn.className = 'active';
+        rBtn.className = '';
+      } else {
+        qTab.style.display = 'none';
+        rTab.style.display = 'block';
+        qBtn.className = '';
+        rBtn.className = 'active';
+      }
+    }
+
+    function renderFeedbackQuestions(questions) {
+      const list = document.getElementById('fbQuestionsList');
+      if (!questions || questions.length === 0) {
+        list.innerHTML = `<p style="color:var(--muted);padding:14px;background:var(--very-light);border-radius:8px;">No custom questions created yet. Add questions below.</p>`;
+        return;
+      }
+
+      list.innerHTML = questions.map((q, i) => `
+        <div class="feedback-q-card">
+          <div>
+            <strong>${i + 1}. ${q.text}</strong>
+            <span style="display:block;font-size:0.8rem;color:var(--muted);margin-top:2px;">
+              Type: <b style="color:var(--primary);">${q.type === 'rating' ? '⭐ 1-5 Star Rating' : (q.type === 'choice' ? '🔘 Multiple Choice' : '📝 Text Comments')}</b>
+            </span>
+          </div>
+          <button type="button" onclick="handleDeleteFbQuestion('${q.id}')" style="background:none;border:none;cursor:pointer;color:var(--error);" title="Remove question">
+            ${icons.trash}
+          </button>
+        </div>
+      `).join('');
+    }
+
+    function renderFeedbackResponses(responses) {
+      document.getElementById('fbRespCountBadge').textContent = responses.length;
+      const area = document.getElementById('fbResponsesArea');
+
+      if (!responses || responses.length === 0) {
+        area.innerHTML = `<div style="text-align:center;padding:32px;color:var(--muted);background:var(--very-light);border-radius:10px;">No attendee responses submitted yet. Once active, participant reviews will appear here.</div>`;
+        return;
+      }
+
+      area.innerHTML = responses.map(r => `
+        <div class="feedback-response-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div>
+              <strong>${r.userName || 'Anonymous Participant'}</strong>
+              <small style="color:var(--muted);display:block;">${r.submittedAt ? formatDateShort(r.submittedAt) : 'Recent'}</small>
+            </div>
+            <div style="background:#fef3c7;color:#b45309;padding:4px 8px;border-radius:6px;font-weight:700;font-size:0.9rem;">
+              ⭐ ${r.rating} / 5
+            </div>
+          </div>
+          <div style="margin-top:8px;font-size:0.92rem;color:var(--text-2);">
+            ${Object.entries(r.answers || {}).map(([k, v]) => `
+              <p style="margin:4px 0;"><strong>${k}:</strong> ${v}</p>
+            `).join('')}
+            ${r.comments ? `<p style="margin-top:6px;font-style:italic;">"${r.comments}"</p>` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function handleAddFbQuestion(e) {
+      e.preventDefault();
+      const text = document.getElementById('newFbQuestionText').value;
+      const type = document.getElementById('newFbQuestionType').value;
+
+      const res = await api(`/api/admin/events/${activeModalEventId}/feedback/questions`, {
+        method: 'POST',
+        body: JSON.stringify({ question: { text, type } })
+      });
+
+      if (res.success) {
+        const ev = allEvents.find(item => String(item.id) === String(activeModalEventId));
+        if (ev) {
+          ev.feedbackQuestions = res.questions;
+          renderFeedbackQuestions(ev.feedbackQuestions);
+        }
+        document.getElementById('newFbQuestionText').value = '';
+        showToast('Question added to feedback form!', icons.circleCheck);
+      }
+    }
+
+    async function handleDeleteFbQuestion(qId) {
+      const ev = allEvents.find(item => String(item.id) === String(activeModalEventId));
+      if (!ev || !ev.feedbackQuestions) return;
+
+      const updated = ev.feedbackQuestions.filter(q => String(q.id) !== String(qId));
+      const res = await api(`/api/admin/events/${activeModalEventId}/feedback/questions`, {
+        method: 'POST',
+        body: JSON.stringify({ questions: updated })
+      });
+
+      if (res.success) {
+        ev.feedbackQuestions = res.questions;
+        renderFeedbackQuestions(ev.feedbackQuestions);
+        showToast('Question removed.', icons.circleCheck);
+      }
+    }
+
+    loadEvents();
+  </script>
+</body>
+</html>

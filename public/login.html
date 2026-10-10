@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portal Access &amp; Login — ServeDeServe</title>
+  <meta name="description" content="Sign in to ServeDeServe as an Administrator or access the Community User Event Portal.">
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .portal-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--very-light);
+      color: var(--primary);
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      margin-bottom: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="/js/shared.js"></script>
+  <script>
+    function renderLoginPage() {
+      document.getElementById('app').innerHTML = `
+        ${renderHeader('')}
+        <main id="main">
+          <div class="login-shell">
+            <div class="login-card" style="width:min(100%, 500px);">
+              
+              <!-- Community User Login Icon & Title -->
+              <div class="login-icon" style="background:#f3e8ff;color:var(--primary);">
+                ${icons.userRound}
+              </div>
+              <div class="portal-badge">COMMUNITY PARTICIPANT</div>
+              <h1 style="font-size:1.85rem;margin-bottom:6px;">User Event Portal</h1>
+              <p style="color:var(--text-2);font-size:0.95rem;margin-bottom:24px;">
+                Access accessible community events, view photo galleries, submit feedback, and manage your registrations.
+              </p>
+
+              <form onsubmit="handleUserLogin(event)" autocomplete="off">
+                <div class="field" style="margin-bottom:14px;text-align:left;">
+                  <label for="userName">Full Name <span style="color:var(--error);">*</span></label>
+                  <input type="text" id="userName" required placeholder="Enter your full name" autocomplete="off">
+                </div>
+                <div class="field" style="margin-bottom:14px;text-align:left;">
+                  <label for="userEmail">Email Address <span style="color:var(--error);">*</span></label>
+                  <input type="email" id="userEmail" required placeholder="your.name@example.com" autocomplete="off">
+                </div>
+                <div class="field" style="margin-bottom:22px;text-align:left;">
+                  <label for="userDept">Community Role / Organization <span style="font-weight:400;color:var(--muted);">(Optional)</span></label>
+                  <input type="text" id="userDept" placeholder="e.g. Volunteer, Student, Resident" autocomplete="off">
+                </div>
+
+                <button type="submit" class="button button--primary" style="width:100%;font-size:1.05rem;">
+                  Enter Event Portal ${icons.arrowRight}
+                </button>
+              </form>
+
+            </div>
+          </div>
+        </main>
+        ${renderFooter()}
+        ${renderA11yPanel()}
+      `;
+    }
+
+    function handleUserLogin(e) {
+      e.preventDefault();
+      const name = document.getElementById('userName').value.trim();
+      const email = document.getElementById('userEmail').value.trim();
+      const dept = document.getElementById('userDept') ? document.getElementById('userDept').value.trim() : 'Community Member';
+      
+      if (!name || !email) {
+        alert('Please enter your name and email address.');
+        return;
+      }
+
+      sessionStorage.removeItem('adminToken');
+      sessionStorage.removeItem('adminUser');
+      sessionStorage.setItem('sds-user-profile', JSON.stringify({ name, email, department: dept }));
+      sessionStorage.setItem('sds-active-role', 'user');
+      window.location.href = '/events';
+    }
+
+    renderLoginPage();
+  </script>
+</body>
+</html>

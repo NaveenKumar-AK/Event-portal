@@ -1,0 +1,22 @@
+{
+  "name": "servedeserve-event-portal",
+  "version": "1.0.0",
+  "description": "ServeDeServe.org Event Portal - User & Admin Side",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "events",
+    "portal",
+    "servedeserve"
+  ],
+  "author": "ServeDeServe",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "express": "^4.18.2"
+  }
+}

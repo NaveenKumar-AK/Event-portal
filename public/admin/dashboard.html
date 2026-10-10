@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard — ServeDeServe</title>
+  <meta name="description" content="ServeDeServe admin dashboard for event monitoring and statistics.">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div id="app"></div>
+  <script src="/js/shared.js"></script>
+  <script>
+    if (!requireAdminAuth()) {
+      throw new Error('Access denied: Admin authentication required');
+    }
+
+    document.getElementById('app').innerHTML = `
+      <div class="admin-shell">
+        ${renderAdminSidebar('dashboard')}
+        <main class="admin-content" id="main">
+          <div class="page-heading-row" style="margin-bottom:24px;">
+            <div>
+              <p class="eyebrow" style="color:var(--primary);font-weight:700;font-size:0.85rem;text-transform:uppercase;">Overview</p>
+              <h1 style="font-size:2rem;margin-bottom:6px;">Administrator Dashboard</h1>
+              <p style="color:var(--muted);">Real-time monitoring of events, registrations, and capacity.</p>
+            </div>
+            <div style="display:flex;gap:12px;align-items:center;">
+              <a href="/admin/events/create" class="button button--primary">${icons.plus} Create Event</a>
+            </div>
+          </div>
+
+          <div class="stat-grid" id="statsGrid">
+            <div class="stat-card">
+              <span>${icons.calendar}</span>
+              <div>
+                <small>Total Events</small>
+                <strong id="statTotalEvents">-</strong>
+                <p>All recorded</p>
+              </div>
+            </div>
+            <div class="stat-card">
+              <span>${icons.zap}</span>
+              <div>
+                <small>Active Events</small>
+                <strong id="statActiveEvents">-</strong>
+                <p>Scheduled & live</p>
+              </div>
+            </div>
+            <div class="stat-card">
+              <span>${icons.users}</span>
+              <div>
+                <small>Total Registrations</small>
+                <strong id="statTotalReg">-</strong>
+                <p>Verified sign-ups</p>
+              </div>
+            </div>
+            <div class="stat-card">
+              <span>${icons.barChart}</span>
+              <div>
+                <small>Fill Rate</small>
+                <strong id="statFillRate">-%</strong>
+                <p id="statCapacitySub">0 / 0 spots</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="admin-section-heading" style="margin-top:36px;">
+            <div>
+              <h2>Recent Event Activity</h2>
+              <p style="color:var(--muted);font-size:0.9rem;">Overview of live events and participant engagement</p>
+            </div>
+            <a href="/admin/events" class="button button--secondary">View All Events ${icons.arrowRight}</a>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Event Details</th>
+                  <th>Date & Time</th>
+                  <th>Venue</th>
+                  <th>Registration Status</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="eventsTableBody">
+                <tr><td colspan="6" style="text-align:center;padding:32px;">Loading events...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="admin-section-heading" style="margin-top:40px;">
+            <div>
+              <h2>Recent Registrations</h2>
+              <p style="color:var(--muted);font-size:0.9rem;">Latest attendee submissions requiring monitoring</p>
+            </div>
+            <a href="/admin/registrations" class="button button--secondary">Manage All Registrations ${icons.arrowRight}</a>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Ref ID</th>
+                  <th>Participant</th>
+                  <th>Event</th>
+                  <th>Registered On</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="registrationsTableBody">
+                <tr><td colspan="6" style="text-align:center;padding:32px;">Loading registrations...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </main>
+      </div>
+      ${renderA11yPanel()}
+    `;
+
+    async function loadDashboard() {
+      // 1. Load Stats
+      const statsRes = await api('/api/admin/stats');
+      if (statsRes.success) {
+        const s = statsRes.stats;
+        document.getElementById('statTotalEvents').textContent = s.totalEvents;
+        document.getElementById('statActiveEvents').textContent = s.activeEvents;
+        document.getElementById('statTotalReg').textContent = s.totalRegistrations;
+        document.getElementById('statFillRate').textContent = s.fillRate + '%';
+        document.getElementById('statCapacitySub').textContent = `${s.totalRegistered} / ${s.totalCapacity} spots`;
+      }
+
+      // 2. Load Events
+      const eventsRes = await api('/api/admin/events');
+      if (eventsRes.success && eventsRes.events) {
+        const tbody = document.getElementById('eventsTableBody');
+        const recentEvents = eventsRes.events.slice(0, 5);
+        tbody.innerHTML = recentEvents.map(e => {
+          const regCount = (typeof e.registeredCount === 'number')
+            ? e.registeredCount
+            : ((typeof e.registrationCount === 'number') ? e.registrationCount : 0);
+          const capacity = Number(e.capacity) || 1;
+          const pct = Math.min(100, Math.round((regCount / capacity) * 100));
+
+          return `
+          <tr>
+            <td>
+              <strong>${e.title}</strong>
+              <span class="table-sub">${e.category}</span>
+            </td>
+            <td>
+              <strong>${formatDateShort(e.date)}</strong>
+              <span class="table-sub">${e.time || '10:00 AM'}</span>
+            </td>
+            <td>${e.venue || e.location || 'Civic Hall'}</td>
+            <td>
+              <div style="font-weight:700;font-size:0.9rem;">${regCount} / ${e.capacity || 0} (${pct}%)</div>
+              <div style="width:100px;background:#e5e7eb;height:6px;border-radius:3px;margin-top:4px;overflow:hidden;">
+                <div style="width:${pct}%;background:var(--primary);height:100%;"></div>
+              </div>
+            </td>
+            <td>${renderStatus(e.status)}</td>
+            <td>
+              <a href="/events/${e.id}" class="table-action" target="_blank">${icons.eye} View</a>
+            </td>
+          </tr>
+        `;
+        }).join('');
+      }
+
+      // 3. Load Registrations
+      const regRes = await api('/api/admin/registrations');
+      if (regRes.success && regRes.registrations) {
+        const tbody = document.getElementById('registrationsTableBody');
+        const recentReg = regRes.registrations.slice(0, 5);
+        tbody.innerHTML = recentReg.map(r => {
+          const pName = r.fullName || `${r.firstName || ''} ${r.lastName || ''}`.trim() || 'Attendee';
+          return `
+          <tr>
+            <td><code><strong>${r.referenceId}</strong></code></td>
+            <td>
+              <strong>${pName}</strong>
+              <span class="table-sub">${r.email || ''}</span>
+            </td>
+            <td>
+              <strong>${r.eventTitle}</strong>
+              <span class="table-sub">${formatDateShort(r.eventDate)}</span>
+            </td>
+            <td>${formatDateShort(r.registeredAt)}</td>
+            <td>${renderStatus(r.status)}</td>
+            <td>
+              <select onchange="updateRegStatus('${r.id}', this.value)" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border);font-size:0.85rem;">
+                <option value="confirmed" ${r.status === 'confirmed' ? 'selected' : ''}>Confirmed</option>
+                <option value="pending" ${r.status === 'pending' ? 'selected' : ''}>Pending</option>
+                <option value="cancelled" ${r.status === 'cancelled' ? 'selected' : ''}>Cancelled</option>
+              </select>
+            </td>
+          </tr>
+        `;
+        }).join('');
+      }
+    }
+
+    async function updateRegStatus(regId, newStatus) {
+      const res = await api(`/api/admin/registrations/${regId}/status`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (res.success) {
+        loadDashboard();
+      }
+    }
+
+    loadDashboard();
+  </script>
+</body>
+</html>
