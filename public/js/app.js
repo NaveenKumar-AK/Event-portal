@@ -152,6 +152,11 @@
       state.galleryAutoTimer = null;
     }
 
+    if (window._hostTrackingInterval) {
+      clearInterval(window._hostTrackingInterval);
+      window._hostTrackingInterval = null;
+    }
+
     if (updateHistory) {
       let path = '/';
       if (page === 'events') path = '/events';
@@ -254,8 +259,7 @@
   // ─── Component Renderers ───
 
   function renderHeader() {
-    const isEventsActive = state.page === 'events';
-    const isPortalActive = state.page === 'event-detail' || state.page === 'event-register';
+    const isPortalActive = state.page === 'events' || state.page === 'event-detail' || state.page === 'event-register';
     const isGalleryActive = state.page === 'gallery';
     const isRegActive = state.page === 'registrations';
 
@@ -277,7 +281,6 @@
             <span>Menu</span>
           </button>
           <nav class="main-nav ${state.mobileMenuOpen ? 'is-open' : ''}" aria-label="Main navigation">
-            <button class="${isEventsActive ? 'active' : ''}" id="navHome">Home</button>
             <button class="${isPortalActive ? 'active' : ''}" id="navPortal">Event portal</button>
             <button class="${isGalleryActive ? 'active' : ''}" id="navGallery" style="display:inline-flex;align-items:center;gap:6px;">
               ${icons.image} Gallery
@@ -1065,6 +1068,30 @@
                 </div>
               </div>
 
+              ${(e.liveTracking && e.liveTracking.enabled) ? `
+                <div id="liveHostTrackerBanner" style="background:#fff1f2;border:1.5px solid #fda4af;border-radius:12px;padding:12px 16px;margin-bottom:12px;box-shadow:0 4px 14px rgba(244,63,94,0.12);">
+                  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                      <span class="live-pulse-dot"></span>
+                      <div>
+                        <strong style="color:#9f1239;font-size:0.95rem;display:block;">🔴 LIVE HOST LOCATION BROADCAST</strong>
+                        <span style="font-size:0.86rem;color:#881337;">Presiding Host: <strong id="liveHostName">${e.liveTracking.hostName || hostName}</strong></span>
+                      </div>
+                    </div>
+                    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+                      <div style="text-align:right;">
+                        <span id="liveHostStatusBadge" style="background:#ffe4e6;color:#be123c;font-size:0.82rem;font-weight:800;padding:4px 12px;border-radius:999px;display:inline-block;">
+                          ${e.liveTracking.status || 'En Route'}
+                        </span>
+                        <div id="liveHostEtaText" style="font-size:0.84rem;font-weight:700;color:#9f1239;margin-top:2px;">
+                          ETA: ${e.liveTracking.eta || 'Calculating...'} (${e.liveTracking.distanceKm || 0} km away)
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ` : ''}
+
               <!-- Interactive Leaflet Map with Exact Coordinates -->
               <div class="event-detail-map" style="position:relative;overflow:hidden;border-radius:14px;border:1px solid var(--border);height:360px;background:#f8fafc;margin-bottom:12px;">
                 <div id="eventDetailLeafletMap" style="width:100%;height:100%;min-height:360px;z-index:1;"></div>
@@ -1798,6 +1825,20 @@
       return;
     }
 
+    // Clean up any existing map instance to avoid "Map container is already initialized"
+    if (window._currentDetailMap) {
+      try { window._currentDetailMap.remove(); } catch (err) {}
+      window._currentDetailMap = null;
+    }
+    if (container._leaflet_id) {
+      delete container._leaflet_id;
+    }
+
+    if (window._hostTrackingInterval) {
+      clearInterval(window._hostTrackingInterval);
+      window._hostTrackingInterval = null;
+    }
+
     let lat = 13.0827;
     let lng = 80.2707;
     if (e.coordinates && typeof e.coordinates.lat === 'number' && typeof e.coordinates.lng === 'number') {
@@ -1805,15 +1846,9 @@
       lng = e.coordinates.lng;
     }
 
-    if (window._currentDetailMap) {
-      try {
-        window._currentDetailMap.remove();
-      } catch (err) {}
-      window._currentDetailMap = null;
-    }
-
     try {
-      const map = L.map('eventDetailLeafletMap', { scrollWheelZoom: false }).setView([lat, lng], 15);
+      const isLiveInitial = Boolean(e.liveTracking && e.liveTracking.enabled);
+      const map = L.map('eventDetailLeafletMap', { scrollWheelZoom: false }).setView([lat, lng], isLiveInitial ? 13 : 15);
       window._currentDetailMap = map;
 
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -1822,19 +1857,109 @@
       }).addTo(map);
 
       const locTitle = e.venue || e.location || 'Event Location';
-      const marker = L.marker([lat, lng]).addTo(map);
-      marker.bindPopup(`
+      const venueMarker = L.marker([lat, lng]).addTo(map);
+      venueMarker.bindPopup(`
         <div style="font-family:system-ui,-apple-system,sans-serif;padding:3px 2px;min-width:180px;">
           <strong style="color:#6b21a8;font-size:0.95rem;display:block;margin-bottom:3px;">${e.title}</strong>
-          <span style="font-weight:600;display:block;color:#1e293b;font-size:0.88rem;">${locTitle}</span>
+          <span style="font-weight:600;display:block;color:#1e293b;font-size:0.88rem;">${locTitle} (Destination)</span>
           <span style="font-size:0.8rem;color:#64748b;display:block;margin-top:2px;">${e.address || ''}</span>
-          <small style="color:#7c3aed;font-weight:700;margin-top:5px;display:block;">📍 ${lat.toFixed(4)}, ${lng.toFixed(4)}</small>
+          <small style="color:#7c3aed;font-weight:700;margin-top:5px;display:block;">📍 Venue: ${lat.toFixed(4)}, ${lng.toFixed(4)}</small>
         </div>
-      `).openPopup();
+      `);
+
+      let hostMarker = null;
+      let routeLine = null;
+
+      const hostPopupContent = (tr) => `
+        <div style="font-family:system-ui,-apple-system,sans-serif;padding:3px;min-width:190px;">
+          <strong style="color:#dc2626;font-size:0.95rem;display:block;">🔴 Presiding Host Live Location</strong>
+          <span style="font-weight:700;display:block;color:#1e293b;">${tr.hostName || e.host?.name || 'Presiding Dignitary'}</span>
+          <span style="font-size:0.82rem;color:#64748b;display:block;margin-top:2px;">Status: <strong>${tr.status || 'En Route'}</strong></span>
+          <small style="color:#9f1239;font-weight:800;margin-top:4px;display:block;">ETA: ${tr.eta || 'Calculating...'} (${tr.distanceKm || 0} km away)</small>
+        </div>
+      `;
+
+      function renderOrUpdateHost(tr) {
+        if (!tr || !tr.currentLocation) return;
+        const hostLat = tr.currentLocation.lat;
+        const hostLng = tr.currentLocation.lng;
+
+        if (!hostMarker) {
+          const hostIcon = L.divIcon({
+            html: '<div class="host-pin-pulse" title="Presiding Host Live Location">🚗</div>',
+            className: '',
+            iconSize: [42, 42],
+            iconAnchor: [21, 21]
+          });
+          hostMarker = L.marker([hostLat, hostLng], { icon: hostIcon }).addTo(map);
+          hostMarker.bindPopup(hostPopupContent(tr));
+
+          routeLine = L.polyline([[hostLat, hostLng], [lat, lng]], {
+            color: '#e11d48',
+            dashArray: '8, 8',
+            weight: 3.5,
+            opacity: 0.85
+          }).addTo(map);
+        } else {
+          hostMarker.setLatLng([hostLat, hostLng]);
+          if (routeLine) routeLine.setLatLngs([[hostLat, hostLng], [lat, lng]]);
+          hostMarker.setPopupContent(hostPopupContent(tr));
+        }
+
+        // Adjust map bounds smoothly without erratic jumps
+        if (Math.abs(hostLat - lat) > 0.001 || Math.abs(hostLng - lng) > 0.001) {
+          map.fitBounds([[hostLat, hostLng], [lat, lng]], { padding: [50, 50], maxZoom: 16 });
+        } else {
+          map.setView([lat, lng], 15);
+        }
+
+        // Update banner DOM elements
+        const banner = document.getElementById('liveHostTrackerBanner');
+        if (banner) {
+          banner.style.display = 'block';
+          const hostNameEl = document.getElementById('liveHostName');
+          if (hostNameEl) hostNameEl.textContent = tr.hostName || 'Presiding Host';
+          const statusBadge = document.getElementById('liveHostStatusBadge');
+          if (statusBadge) statusBadge.textContent = tr.status || 'En Route';
+          const etaText = document.getElementById('liveHostEtaText');
+          if (etaText) etaText.textContent = `ETA: ${tr.eta || '--'} (${tr.distanceKm || 0} km away)`;
+        }
+      }
+
+      function removeHost() {
+        if (hostMarker) { map.removeLayer(hostMarker); hostMarker = null; }
+        if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+        const banner = document.getElementById('liveHostTrackerBanner');
+        if (banner) banner.style.display = 'none';
+        map.setView([lat, lng], 15);
+      }
+
+      if (isLiveInitial && e.liveTracking) {
+        renderOrUpdateHost(e.liveTracking);
+      } else {
+        venueMarker.openPopup();
+      }
+
+      // Live Telemetry Polling (every 3 seconds)
+      window._hostTrackingInterval = setInterval(async () => {
+        try {
+          const res = await fetch('/api/events/' + e.id + '/host-tracking');
+          const data = await res.json();
+          if (data.success && data.liveTracking) {
+            if (data.liveTracking.enabled) {
+              renderOrUpdateHost(data.liveTracking);
+            } else {
+              removeHost();
+            }
+          }
+        } catch (pollErr) {
+          // graceful network error handling
+        }
+      }, 3000);
 
       setTimeout(() => {
         if (window._currentDetailMap) window._currentDetailMap.invalidateSize();
-      }, 250);
+      }, 300);
     } catch (err) {
       console.warn('Leaflet initialization error:', err);
     }

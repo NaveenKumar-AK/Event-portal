@@ -73,7 +73,19 @@ const events = [
         },
         submittedAt: '2026-10-06T11:45:00Z'
       }
-    ]
+    ],
+    liveTracking: {
+      enabled: true,
+      hostName: 'Dr. Sarah Jenkins (Presiding Keynote Speaker)',
+      token: 'ht_token_ev1',
+      currentLocation: { lat: 51.5200, lng: -0.1500 },
+      startLocation: { lat: 51.5350, lng: -0.1750 },
+      status: 'En Route',
+      eta: '12 mins',
+      distanceKm: 2.1,
+      speedKmh: 28,
+      updatedAt: new Date().toISOString()
+    }
   },
   {
     id: 2,
@@ -385,4 +397,28 @@ const adminUser = {
 
 const adminSessions = new Set();
 
-module.exports = { events, registrations, locations, adminUser, adminSessions };
+function calculateDistanceKm(lat1, lon1, lat2, lon2) {
+  if (lat1 === undefined || lon1 === undefined || lat2 === undefined || lon2 === undefined) return 0;
+  const R = 6371; // Earth's radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Number((R * c).toFixed(2));
+}
+
+function calculateETA(distanceKm, averageSpeedKmh = 28) {
+  if (distanceKm <= 0.08) return 'Arrived at Venue';
+  if (distanceKm <= 0.3) return 'Arriving now (< 1 min)';
+  const hours = distanceKm / averageSpeedKmh;
+  const minutes = Math.max(1, Math.round(hours * 60));
+  if (minutes < 60) return `${minutes} min${minutes > 1 ? 's' : ''}`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${h}h ${m}m`;
+}
+
+module.exports = { events, registrations, locations, adminUser, adminSessions, calculateDistanceKm, calculateETA };

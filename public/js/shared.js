@@ -348,7 +348,31 @@ function requireAdminAuth() {
 
 // ─── Header Helper (for standalone / login pages) ───
 function renderHeader(activePage = '') {
-  const isAdmin = sessionStorage.getItem('sds-active-role') === 'admin' && sessionStorage.getItem('adminToken');
+  const isLoginPage = activePage === 'login' || (typeof window !== 'undefined' && window.location.pathname.includes('/login'));
+
+  if (isLoginPage) {
+    return `
+      <header class="site-header">
+        <div class="topline">A unified platform for accessible public services</div>
+        <div class="nav-shell">
+          <a href="/" class="brand" aria-label="ServeDeServe Event Portal home">
+            <span class="brand__mark" aria-hidden="true">
+              <span></span><span></span><span></span>
+            </span>
+            <span>
+              <strong>ServeDeServe</strong>
+              <small>Services that serve everyone</small>
+            </span>
+          </a>
+          <nav class="main-nav" id="mainNav" style="display:flex;align-items:center;">
+            <a href="/admin/login" class="profile-button" id="navAdminBtn" style="text-decoration:none;cursor:pointer;font-weight:700;" title="Sign in as Admin with pre-seeded demo credentials">
+              ${icons.lock} Sign in as Admin
+            </a>
+          </nav>
+        </div>
+      </header>
+    `;
+  }
 
   return `
     <header class="site-header">
@@ -367,8 +391,7 @@ function renderHeader(activePage = '') {
           ${icons.menu} <span>Menu</span>
         </button>
         <nav class="main-nav" id="mainNav">
-          <a href="/events" class="${activePage === 'events' ? 'active' : ''}">Home</a>
-          <a href="/events" class="${activePage === 'portal' ? 'active' : ''}">Event portal</a>
+          <a href="/events" class="${(activePage === 'events' || activePage === 'portal') ? 'active' : ''}">Event portal</a>
           <a href="/gallery" class="${activePage === 'gallery' ? 'active' : ''}">Gallery</a>
           <a href="/registrations" class="${activePage === 'registrations' ? 'active' : ''}">My registrations</a>
           <a href="/events" onclick="window.sessionStorage.setItem('openHelp','1')">Help &amp; support</a>

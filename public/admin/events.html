@@ -179,11 +179,12 @@
                   <th>Status</th>
                   <th>Photo Gallery</th>
                   <th>Feedback Form</th>
+                  <th>Host Live Tracking</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody id="eventsListBody">
-                <tr><td colspan="8" style="text-align:center;padding:32px;">Loading events...</td></tr>
+                <tr><td colspan="9" style="text-align:center;padding:32px;">Loading events...</td></tr>
               </tbody>
             </table>
           </div>
@@ -321,6 +322,107 @@
           </div>
         </section>
       </div>
+
+      <!-- Host Live Tracking Modal -->
+      <div class="modal-backdrop" id="hostTrackingModal" style="display:none;" role="presentation">
+        <section class="modal-dialog modal-dialog--lg" role="dialog" aria-modal="true" aria-labelledby="htModalTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow" id="htEventSub">Presiding Host Location Service</p>
+              <h2 id="htModalTitle">Host Live Tracking &amp; GPS Broadcasting</h2>
+            </div>
+            <button class="icon-button" onclick="closeHostTrackingModal()" aria-label="Close modal">
+              ${icons.x}
+            </button>
+          </div>
+
+          <div style="margin:16px 0;padding:14px;background:#fdf2f8;border-radius:12px;border:1px solid #fbcfe8;">
+            <strong style="color:#9f1239;display:block;margin-bottom:3px;">How Host Live Tracking Works:</strong>
+            <span style="font-size:0.9rem;color:#831843;line-height:1.5;display:block;">
+              The presiding dignitary (guest of honor, keynote speaker) receives a private link on their phone. When they open it, their live GPS broadcasts to the public event map so attendees can track their real-time arrival and ETA.
+            </span>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+            <div style="background:#f8fafc;padding:16px;border-radius:12px;border:1px solid var(--border);">
+              <label style="font-weight:700;display:block;margin-bottom:8px;">Live Tracking Status</label>
+              <div style="display:flex;align-items:center;gap:12px;">
+                <button type="button" id="btnToggleHtState" onclick="toggleHostTrackingStatus()" class="button button--primary" style="padding:7px 18px;font-size:0.88rem;">
+                  Enable Tracking
+                </button>
+                <span id="htEnabledLabel" style="font-weight:700;font-size:0.92rem;color:var(--muted);">Inactive</span>
+              </div>
+            </div>
+
+            <div style="background:#f8fafc;padding:16px;border-radius:12px;border:1px solid var(--border);">
+              <label for="htHostName" style="font-weight:700;display:block;margin-bottom:6px;">Presiding Host / Dignitary Name</label>
+              <div style="display:flex;gap:8px;">
+                <input type="text" id="htHostName" style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid var(--border);" placeholder="e.g. Dr. Sarah Jenkins">
+                <button type="button" class="button button--secondary" onclick="saveHostName()" style="padding:8px 14px;">Save</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Shareable Link for Presiding Host -->
+          <div style="background:#f1f5f9;border-radius:12px;padding:16px;margin-bottom:20px;">
+            <label style="font-weight:700;display:block;margin-bottom:6px;font-size:0.9rem;">Private Link for Presiding Host (Mobile GPS)</label>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+              <input type="text" id="htShareUrl" readonly style="flex:1;min-width:280px;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:#fff;font-family:monospace;font-size:0.84rem;">
+              <button type="button" class="button button--secondary" onclick="copyHostShareUrl()" style="white-space:nowrap;padding:9px 16px;">
+                📋 Copy Link for Host
+              </button>
+              <a id="htOpenLink" href="#" target="_blank" class="button button--primary" style="white-space:nowrap;padding:9px 16px;text-decoration:none;">
+                ↗️ Open Host Portal
+              </a>
+            </div>
+            <small style="color:var(--muted);display:block;margin-top:6px;">Share this link with the presiding host via WhatsApp/Email. They can broadcast their live location without an app installation.</small>
+          </div>
+
+          <!-- Live Journey Telemetry & Simulator -->
+          <div style="border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:20px;background:#fff;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+              <div>
+                <h4 style="margin:0;font-size:1.05rem;">Live Journey Telemetry &amp; Route Simulator</h4>
+                <small style="color:var(--muted);">Advance the host along their journey towards the venue to preview real-time attendee map sync.</small>
+              </div>
+              <span id="htCurrentStatusBadge" style="background:#fee2e2;color:#b91c1c;padding:5px 14px;border-radius:999px;font-weight:700;font-size:0.85rem;">
+                En Route
+              </span>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));gap:12px;margin-bottom:16px;">
+              <div style="background:#f8fafc;padding:10px 14px;border-radius:8px;">
+                <small style="color:var(--muted);text-transform:uppercase;font-size:0.75rem;font-weight:700;">Distance to Venue</small>
+                <div id="htDistanceVal" style="font-weight:800;font-size:1.15rem;margin-top:2px;">-- km</div>
+              </div>
+              <div style="background:#f8fafc;padding:10px 14px;border-radius:8px;">
+                <small style="color:var(--muted);text-transform:uppercase;font-size:0.75rem;font-weight:700;">Estimated ETA</small>
+                <div id="htEtaVal" style="font-weight:800;font-size:1.15rem;color:var(--primary);margin-top:2px;">--</div>
+              </div>
+              <div style="background:#f8fafc;padding:10px 14px;border-radius:8px;">
+                <small style="color:var(--muted);text-transform:uppercase;font-size:0.75rem;font-weight:700;">Current Speed</small>
+                <div id="htSpeedVal" style="font-weight:800;font-size:1.15rem;margin-top:2px;">-- km/h</div>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+              <button type="button" class="button button--secondary" onclick="simulateAdminStep()" style="padding:8px 16px;">
+                🚗 Step Closer (+25%)
+              </button>
+              <button type="button" class="button button--secondary" onclick="simulateAdminArrived()" style="padding:8px 16px;">
+                🏁 Mark as Arrived at Venue
+              </button>
+              <button type="button" class="button button--ghost" onclick="resetAdminTracking()" style="padding:8px 16px;">
+                🔄 Reset Route to Start
+              </button>
+            </div>
+          </div>
+
+          <div style="display:flex;justify-content:flex-end;gap:10px;">
+            <button type="button" class="button button--primary" onclick="closeHostTrackingModal()">Done</button>
+          </div>
+        </section>
+      </div>
     `;
 
     async function loadEvents() {
@@ -373,6 +475,11 @@
             <td>
               <button type="button" class="badge-btn ${isFbActive ? 'active' : 'inactive'}" onclick="openFeedbackModal(${e.id})" title="Configure Feedback Form">
                 ⭐ ${isFbActive ? 'Active (' + respCount + ')' : 'Inactive'}
+              </button>
+            </td>
+            <td>
+              <button type="button" class="badge-btn ${Boolean(e.liveTracking && e.liveTracking.enabled) ? 'active' : 'inactive'}" onclick="openHostTrackingModal(${e.id})" title="Manage Presiding Host Live GPS Tracking" style="${Boolean(e.liveTracking && e.liveTracking.enabled) ? 'background:#ffe4e6;color:#be123c;border-color:#f43f5e;' : ''}">
+                ${Boolean(e.liveTracking && e.liveTracking.enabled) ? '🔴 Live ON' : '⚪ Tracking Off'}
               </button>
             </td>
             <td>
@@ -670,6 +777,152 @@
         ev.feedbackQuestions = res.questions;
         renderFeedbackQuestions(ev.feedbackQuestions);
         showToast('Question removed.', icons.circleCheck);
+      }
+    }
+
+    // ─── Host Live Tracking Modal Handlers ───
+    function openHostTrackingModal(id) {
+      activeModalEventId = id;
+      const ev = allEvents.find(item => String(item.id) === String(id));
+      if (!ev) return;
+
+      document.getElementById('htEventSub').textContent = ev.title;
+      updateHtModalUI(ev);
+
+      document.getElementById('hostTrackingModal').style.display = 'grid';
+    }
+
+    function closeHostTrackingModal() {
+      document.getElementById('hostTrackingModal').style.display = 'none';
+      renderEventsTable(allEvents);
+    }
+
+    function updateHtModalUI(ev) {
+      const tr = ev.liveTracking || { enabled: false };
+      const hostName = tr.hostName || (typeof ev.host === 'object' ? ev.host.name : ev.host) || 'Presiding Dignitary';
+      const token = tr.token || ('ht_' + ev.id);
+
+      const btnToggle = document.getElementById('btnToggleHtState');
+      const label = document.getElementById('htEnabledLabel');
+      if (tr.enabled) {
+        btnToggle.textContent = 'Disable Tracking';
+        btnToggle.className = 'button button--secondary';
+        label.textContent = 'Active (Live Broadcasting)';
+        label.style.color = '#dc2626';
+      } else {
+        btnToggle.textContent = 'Enable Tracking';
+        btnToggle.className = 'button button--primary';
+        label.textContent = 'Inactive (Off)';
+        label.style.color = 'var(--muted)';
+      }
+
+      document.getElementById('htHostName').value = hostName;
+
+      const origin = window.location.origin;
+      const shareUrl = `${origin}/host-tracker.html?eventId=${ev.id}&token=${token}`;
+      document.getElementById('htShareUrl').value = shareUrl;
+      document.getElementById('htOpenLink').href = shareUrl;
+
+      document.getElementById('htCurrentStatusBadge').textContent = tr.status || 'En Route';
+      document.getElementById('htDistanceVal').textContent = (tr.distanceKm || 0) + ' km';
+      document.getElementById('htEtaVal').textContent = tr.eta || '--';
+      document.getElementById('htSpeedVal').textContent = (tr.speedKmh || 0) + ' km/h';
+    }
+
+    async function toggleHostTrackingStatus() {
+      const ev = allEvents.find(item => String(item.id) === String(activeModalEventId));
+      if (!ev) return;
+
+      const currentEnabled = Boolean(ev.liveTracking && ev.liveTracking.enabled);
+      const newEnabled = !currentEnabled;
+
+      const res = await api(`/api/admin/events/${activeModalEventId}/host-tracking`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          enabled: newEnabled,
+          hostName: document.getElementById('htHostName').value.trim()
+        })
+      });
+
+      if (res.success && res.liveTracking) {
+        ev.liveTracking = res.liveTracking;
+        updateHtModalUI(ev);
+        showToast(`Host live tracking ${newEnabled ? 'enabled' : 'disabled'}!`, icons.circleCheck);
+      }
+    }
+
+    async function saveHostName() {
+      const name = document.getElementById('htHostName').value.trim();
+      if (!name) return alert('Please enter a host name');
+
+      const res = await api(`/api/admin/events/${activeModalEventId}/host-tracking`, {
+        method: 'PUT',
+        body: JSON.stringify({ hostName: name })
+      });
+
+      if (res.success && res.liveTracking) {
+        const ev = allEvents.find(item => String(item.id) === String(activeModalEventId));
+        if (ev) ev.liveTracking = res.liveTracking;
+        showToast('Host name updated!', icons.circleCheck);
+      }
+    }
+
+    function copyHostShareUrl() {
+      const input = document.getElementById('htShareUrl');
+      input.select();
+      navigator.clipboard.writeText(input.value).then(() => {
+        showToast('Broadcasting link copied to clipboard!', icons.circleCheck);
+      }).catch(() => {
+        document.execCommand('copy');
+        showToast('Link copied!', icons.circleCheck);
+      });
+    }
+
+    async function simulateAdminStep() {
+      const res = await api(`/api/admin/events/${activeModalEventId}/host-tracking/simulate-step`, {
+        method: 'POST',
+        body: JSON.stringify({ stepRatio: 0.25 })
+      });
+
+      if (res.success && res.liveTracking) {
+        const ev = allEvents.find(item => String(item.id) === String(activeModalEventId));
+        if (ev) {
+          ev.liveTracking = res.liveTracking;
+          updateHtModalUI(ev);
+        }
+        showToast('Host stepped 25% closer to venue!', icons.circleCheck);
+      }
+    }
+
+    async function simulateAdminArrived() {
+      const res = await api(`/api/admin/events/${activeModalEventId}/host-tracking/simulate-step`, {
+        method: 'POST',
+        body: JSON.stringify({ arrived: true })
+      });
+
+      if (res.success && res.liveTracking) {
+        const ev = allEvents.find(item => String(item.id) === String(activeModalEventId));
+        if (ev) {
+          ev.liveTracking = res.liveTracking;
+          updateHtModalUI(ev);
+        }
+        showToast('Host marked as arrived at venue!', icons.circleCheck);
+      }
+    }
+
+    async function resetAdminTracking() {
+      const res = await api(`/api/admin/events/${activeModalEventId}/host-tracking`, {
+        method: 'PUT',
+        body: JSON.stringify({ reset: true })
+      });
+
+      if (res.success && res.liveTracking) {
+        const ev = allEvents.find(item => String(item.id) === String(activeModalEventId));
+        if (ev) {
+          ev.liveTracking = res.liveTracking;
+          updateHtModalUI(ev);
+        }
+        showToast('Host route reset to start location.', icons.circleCheck);
       }
     }
 
