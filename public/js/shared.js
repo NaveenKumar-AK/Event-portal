@@ -353,7 +353,6 @@ function renderHeader(activePage = '') {
   if (isLoginPage) {
     return `
       <header class="site-header">
-        <div class="topline">A unified platform for accessible public services</div>
         <div class="nav-shell">
           <a href="/" class="brand" aria-label="ServeDeServe Event Portal home">
             <span class="brand__mark" aria-hidden="true">
@@ -376,7 +375,6 @@ function renderHeader(activePage = '') {
 
   return `
     <header class="site-header">
-      <div class="topline">A unified platform for accessible public services</div>
       <div class="nav-shell">
         <a href="/" class="brand" aria-label="ServeDeServe Event Portal home">
           <span class="brand__mark" aria-hidden="true">

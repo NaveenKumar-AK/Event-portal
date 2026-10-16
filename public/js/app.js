@@ -265,7 +265,6 @@
 
     return `
       <header class="site-header">
-        <div class="topline">A unified platform for accessible public services</div>
         <div class="nav-shell">
           <button class="brand" id="brandBtn" aria-label="ServeDeServe Event Portal home">
             <span class="brand__mark" aria-hidden="true">
