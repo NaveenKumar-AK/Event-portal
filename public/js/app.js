@@ -157,12 +157,24 @@
       window._hostTrackingInterval = null;
     }
 
+    if (page === 'registrations') {
+      state.page = 'events';
+      if (updateHistory) {
+        window.history.pushState({ page: 'events', eventId: null }, '', '/events#myRegistrationsSection');
+      }
+      render();
+      setTimeout(() => {
+        const el = document.getElementById('myRegistrationsSection');
+        if (el) el.scrollIntoView({ behavior: state.reduceMotion ? 'auto' : 'smooth', block: 'start' });
+      }, 100);
+      return;
+    }
+
     if (updateHistory) {
       let path = '/';
       if (page === 'events') path = '/events';
       else if (page === 'event-detail') path = `/events/${state.selectedEvent.id}`;
       else if (page === 'event-register') path = `/register/${state.selectedEvent.id}`;
-      else if (page === 'registrations') path = '/registrations';
       else if (page === 'gallery') path = '/gallery';
       else if (page === 'confirmation') path = '/confirmation';
 
@@ -200,7 +212,11 @@
       const ev = state.events.find(e => String(e.id) === registerMatch[1]) || state.events[0];
       navigate('event-register', ev, false);
     } else if (path.includes('/registrations') || path.includes('/track')) {
-      navigate('registrations', null, false);
+      navigate('events', null, false);
+      setTimeout(() => {
+        const el = document.getElementById('myRegistrationsSection');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 150);
     } else if (path.includes('/gallery')) {
       const urlParams = new URLSearchParams(window.location.search);
       const evIdParam = urlParams.get('event');
@@ -284,8 +300,6 @@
             <button class="${isGalleryActive ? 'active' : ''}" id="navGallery" style="display:inline-flex;align-items:center;gap:6px;">
               ${icons.image} Gallery
             </button>
-            <button class="${isRegActive ? 'active' : ''}" id="navRegistrations">My registrations</button>
-            <button id="navHelp">Help &amp; support</button>
             <button class="a11y-button" id="navA11y" onclick="toggleA11yPanel()">
               ${icons.accessibility} Accessibility
             </button>
@@ -696,18 +710,18 @@
   function renderEventCard(event) {
     return `
       <article class="event-card">
-        <div class="event-card__image">
-          <img src="${event.image}" alt="${event.alt}">
-          <span>${event.category}</span>
-        </div>
         <div class="event-card__body">
-          <h3>${event.title}</h3>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <span style="color:var(--primary);background:var(--light);border-radius:999px;padding:4px 12px;font-size:0.8rem;font-weight:700;">${event.category}</span>
+            ${event.isFeatured ? `<span style="font-size:0.78rem;font-weight:700;color:#0284c7;background:#e0f2fe;padding:3px 8px;border-radius:6px;">Featured</span>` : ''}
+          </div>
+          <h3 style="margin-bottom:10px;font-size:1.15rem;line-height:1.4;">${event.title}</h3>
           <div class="event-meta">
             <span>${icons.calendar} ${formatDate(event.date)}</span>
             <span>${icons.clock} ${formatTimeRange(event)}</span>
             <span>${icons.mapPin} ${event.location}</span>
           </div>
-          <p>${event.description}</p>
+          <p style="margin-bottom:20px;color:var(--muted);font-size:0.92rem;line-height:1.5;">${event.description}</p>
           <button class="button button--secondary view-detail-btn" data-id="${event.id}">
             View details ${icons.arrowRight}
           </button>
@@ -925,16 +939,11 @@
           <span aria-hidden="true">/</span>
           <span aria-current="page">Event portal</span>
         </nav>
-        <div class="page-heading-row">
-          <header class="page-title">
-            <p class="eyebrow">Event portal</p>
-            <h1>Discover events</h1>
-            <p>Find and participate in upcoming events in your community.</p>
-          </header>
-          <button class="button button--secondary" id="btnMyRegTop">
-            ${icons.ticketCheck} My registrations
-          </button>
-        </div>
+        <header class="page-title">
+          <p class="eyebrow">Event portal</p>
+          <h1>Discover events</h1>
+          <p>Find and participate in upcoming events in your community.</p>
+        </header>
 
         <section class="filter-panel" aria-label="Event filters">
           <div class="field search-field">
@@ -998,6 +1007,8 @@
             <button class="button button--primary" id="clearSearchBtn">Clear search</button>
           </div>
         `}
+
+        ${renderRegistrationsSection()}
 
         ${renderCalendar()}
         ${renderLocationModal()}
@@ -1285,8 +1296,8 @@
     `;
   }
 
-  // View: My Registrations
-  function renderRegistrationsView() {
+  // Section: My Registrations (placed in Event Portal between Upcoming Events and Calendar)
+  function renderRegistrationsSection() {
     const tabs = [
       { label: 'Upcoming', count: state.userRegistrations.length },
       { label: 'Past', count: state.pastRegistrations.length },
@@ -1300,17 +1311,16 @@
     else if (activeTab === 2) items = state.cancelledRegistrations;
 
     return `
-      <main class="page-shell">
-        <nav class="breadcrumbs" aria-label="Breadcrumb">
-          <button id="bcHome">Home</button>
-          <span aria-hidden="true">/</span>
-          <span aria-current="page">My registrations</span>
-        </nav>
-        <header class="page-title">
-          <p class="eyebrow">Event portal</p>
-          <h1>My registrations</h1>
-          <p>Review your upcoming and previous event registrations.</p>
-        </header>
+      <section class="registrations-section" id="myRegistrationsSection" aria-labelledby="registrations-title" style="margin-top:56px;scroll-margin-top:100px;">
+        <div class="calendar-section__heading" style="margin-bottom:20px;">
+          <div>
+            <p class="eyebrow">Your bookings</p>
+            <h2 id="registrations-title" style="display:flex;align-items:center;gap:10px;margin-bottom:5px;">
+              ${icons.ticketCheck} My registrations
+            </h2>
+            <p>Review your upcoming and previous event registrations.</p>
+          </div>
+        </div>
 
         <div class="tabs" role="tablist">
           ${tabs.map((tab, idx) => `
@@ -1328,7 +1338,7 @@
         <div class="list-card">
           ${items.length > 0 ? items.map((reg) => {
             const ev = reg.event;
-            const dayNum = ev.date.slice(-2);
+            const dayNum = ev && ev.date ? ev.date.slice(-2) : '15';
             return `
               <div class="registration-row">
                 <div class="date-tile">
@@ -1336,18 +1346,20 @@
                   <span>OCT</span>
                 </div>
                 <div>
-                  <h3>${ev.title}</h3>
-                  <p>${icons.clock} ${formatDate(ev.date)} · ${formatTimeRange(ev)}</p>
-                  <p>${icons.mapPin} ${ev.location}</p>
+                  <h3>${ev ? ev.title : 'Event'}</h3>
+                  <p>${icons.clock} ${ev ? formatDate(ev.date) : ''} · ${ev ? formatTimeRange(ev) : ''}</p>
+                  <p>${icons.mapPin} ${ev ? (ev.location || ev.venue) : ''}</p>
                 </div>
                 <span class="status status--${reg.status.toLowerCase()}">
                   <span class="status__dot" aria-hidden="true"></span>
                   ${reg.status}
                 </span>
                 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                  <button class="button button--secondary view-detail-btn" data-id="${ev.id}">
-                    View details
-                  </button>
+                  ${ev ? `
+                    <button class="button button--secondary view-detail-btn" data-id="${ev.id}">
+                      View details
+                    </button>
+                  ` : ''}
                   ${activeTab === 0 ? `
                     <button class="button button--secondary btn-view-ticket" data-regid="${reg.id}" title="View Pass">
                       ${icons.ticketCheck} Pass
@@ -1360,21 +1372,23 @@
                     <button class="button button--secondary btn-view-ticket" data-regid="${reg.id}">
                       Certificate
                     </button>
-                    ${ev.feedbackActive ? `
+                    ${ev && ev.feedbackActive ? `
                       <button class="button button--primary btn-open-feedback" data-id="${ev.id}">
                         ${icons.star} Submit Feedback
                       </button>
                     ` : ''}
-                    ${ev.gallery && ev.gallery.length > 0 ? `
+                    ${ev && ev.gallery && ev.gallery.length > 0 ? `
                       <button class="button button--secondary btn-view-event-gallery" data-id="${ev.id}">
                         ${icons.image} Gallery
                       </button>
                     ` : ''}
                   ` : ''}
                   ${activeTab === 2 ? `
-                    <button class="button button--primary btn-reregister" data-id="${ev.id}">
-                      Re-register
-                    </button>
+                    ${ev ? `
+                      <button class="button button--primary btn-reregister" data-id="${ev.id}">
+                        Re-register
+                      </button>
+                    ` : ''}
                   ` : ''}
                 </div>
               </div>
@@ -1383,13 +1397,18 @@
             <div class="empty-state" style="padding:48px 24px;border:none;">
               <p>No ${tabs[activeTab].label.toLowerCase()} registrations to display.</p>
               ${activeTab !== 0 ? `
-                <button class="button button--secondary" id="btnGoUpcoming" style="margin-top:12px;">View Upcoming Events</button>
+                <button class="button button--secondary" id="btnGoUpcoming" style="margin-top:12px;">View Upcoming Registrations</button>
               ` : ''}
             </div>
           `}
         </div>
-      </main>
+      </section>
     `;
+  }
+
+  // Fallback for standalone view if ever directly invoked
+  function renderRegistrationsView() {
+    return renderEventsView();
   }
 
   // ─── Carousel & Gallery Helpers ───
@@ -1505,83 +1524,97 @@
         </header>
 
         ${cur ? `
-          <div class="gallery-hero-header">
-            <div>
+          <div class="gallery-showcase-layout">
+            <!-- Featured Sliding Carousel Section (Main Image) -->
+            <section class="gallery-featured-card" aria-label="Photo carousel for ${cur.title}">
+              <div class="carousel-box">
+                <div class="carousel-viewport">
+                  <img
+                    src="${activePhoto.url}"
+                    alt="${activePhoto.alt || activePhoto.caption}"
+                    class="carousel-slide"
+                    id="carouselMainImg"
+                  />
+
+                  <span class="carousel-badge" aria-live="polite">
+                    Photo ${currentIndex + 1} of ${photos.length}
+                  </span>
+
+                  ${photos.length > 1 ? `
+                    <button class="carousel-nav-btn prev" id="carouselPrevBtn" aria-label="Previous photo">
+                      ${icons.chevronLeft}
+                    </button>
+                    <button class="carousel-nav-btn next" id="carouselNextBtn" aria-label="Next photo">
+                      ${icons.chevronRight}
+                    </button>
+                  ` : ''}
+                </div>
+
+                <div class="carousel-caption-bar">
+                  <p>
+                    <strong>${cur.title}</strong> · <span>${formatDate(cur.date)}</span>:
+                    <em>${activePhoto.caption || 'Community event moment'}</em>
+                  </p>
+                  <div style="display:flex;gap:10px;align-items:center;">
+                    ${photos.length > 1 ? `
+                      <button class="carousel-play-btn" id="carouselPlayBtn" aria-label="${state.galleryAutoPlay ? 'Pause auto-slide' : 'Start auto-slide'}">
+                        ${state.galleryAutoPlay ? '⏸ Pause' : '▶ Auto-slide'}
+                      </button>
+                    ` : ''}
+                  </div>
+                </div>
+              </div>
+
+              ${photos.length > 1 ? `
+                <div class="carousel-thumb-strip" role="tablist" aria-label="Photo thumbnails">
+                  ${photos.map((p, pIdx) => `
+                    <button
+                      class="carousel-thumb ${pIdx === currentIndex ? 'active' : ''}"
+                      data-slide="${pIdx}"
+                      aria-label="Go to photo ${pIdx + 1}"
+                    >
+                      <img src="${p.url}" alt="${p.alt || 'Thumbnail'}" />
+                    </button>
+                  `).join('')}
+                </div>
+              ` : ''}
+            </section>
+
+            <!-- Side Panel beside the image -->
+            <aside class="gallery-side-card">
               <span class="gallery-status-pill">${icons.circleCheck} Completed Event Album</span>
-              <h2 class="gallery-current-title">${cur.title}</h2>
-              <div class="gallery-current-meta">
+              <h2 class="gallery-current-title" style="font-size:1.45rem;margin:8px 0 10px;line-height:1.3;">${cur.title}</h2>
+              <div class="gallery-current-meta" style="flex-direction:column;align-items:flex-start;gap:8px;margin-bottom:20px;">
                 <span>${icons.calendarDays} <strong>${formatDate(cur.date)}</strong></span>
                 <span>${icons.clock} ${formatTimeRange(cur)}</span>
                 <span>${icons.mapPin} ${cur.location}</span>
                 <span class="badge badge--pill">${cur.category}</span>
               </div>
-            </div>
-            <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+
               ${cur.feedbackActive ? `
-                <button class="button button--primary btn-open-feedback" data-id="${cur.id}">
-                  ${icons.star} Submit Feedback
-                </button>
-              ` : ''}
-              <button class="button button--secondary view-detail-btn" data-id="${cur.id}">
-                Event Details
-              </button>
-            </div>
-          </div>
-
-          <!-- Featured Sliding Carousel Section -->
-          <section class="gallery-featured-card" aria-label="Photo carousel for ${cur.title}">
-            <div class="carousel-box">
-              <div class="carousel-viewport">
-                <img
-                  src="${activePhoto.url}"
-                  alt="${activePhoto.alt || activePhoto.caption}"
-                  class="carousel-slide"
-                  id="carouselMainImg"
-                />
-
-                <span class="carousel-badge" aria-live="polite">
-                  Photo ${currentIndex + 1} of ${photos.length}
-                </span>
-
-                ${photos.length > 1 ? `
-                  <button class="carousel-nav-btn prev" id="carouselPrevBtn" aria-label="Previous photo">
-                    ${icons.chevronLeft}
+                <div style="background:#f5f3ff;border:1.5px solid #ddd6fe;border-radius:12px;padding:18px;margin-bottom:18px;">
+                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+                    <span style="color:var(--primary);">${icons.star}</span>
+                    <strong style="color:var(--primary);font-size:0.95rem;">Attendee Feedback</strong>
+                  </div>
+                  <p style="font-size:0.88rem;color:var(--text-2);margin:0 0 14px;line-height:1.45;">
+                    Did you attend this event? Share your experience to help us improve.
+                  </p>
+                  <button class="button button--primary btn-open-feedback" data-id="${cur.id}" style="width:100%;justify-content:center;font-weight:700;">
+                    ${icons.star} Submit Feedback
                   </button>
-                  <button class="carousel-nav-btn next" id="carouselNextBtn" aria-label="Next photo">
-                    ${icons.chevronRight}
-                  </button>
-                ` : ''}
-              </div>
-
-              <div class="carousel-caption-bar">
-                <p>
-                  <strong>${cur.title}</strong> · <span>${formatDate(cur.date)}</span>:
-                  <em>${activePhoto.caption || 'Community event moment'}</em>
-                </p>
-                <div style="display:flex;gap:10px;align-items:center;">
-                  ${photos.length > 1 ? `
-                    <button class="carousel-play-btn" id="carouselPlayBtn" aria-label="${state.galleryAutoPlay ? 'Pause auto-slide' : 'Start auto-slide'}">
-                      ${state.galleryAutoPlay ? '⏸ Pause' : '▶ Auto-slide'}
-                    </button>
-                  ` : ''}
                 </div>
-              </div>
-            </div>
+              ` : `
+                <div style="background:var(--very-light);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:18px;">
+                  <p style="font-size:0.85rem;color:var(--muted);margin:0;">Feedback submission is currently closed.</p>
+                </div>
+              `}
 
-            ${photos.length > 1 ? `
-              <div class="carousel-thumb-strip" role="tablist" aria-label="Photo thumbnails">
-                ${photos.map((p, pIdx) => `
-                  <button
-                    class="carousel-thumb ${pIdx === currentIndex ? 'active' : ''}"
-                    data-slide="${pIdx}"
-                    aria-label="Go to photo ${pIdx + 1}"
-                  >
-                    <img src="${p.url}" alt="${p.alt || 'Thumbnail'}" />
-                  </button>
-                `).join('')}
-              </div>
-            ` : ''}
-          </section>
+              <button class="button button--secondary view-detail-btn" data-id="${cur.id}" style="width:100%;justify-content:center;">
+                View Event Details
+              </button>
+            </aside>
+          </div>
         ` : `
           <div class="empty-state">
             ${icons.image}
@@ -2266,7 +2299,9 @@
     document.querySelectorAll('.tabs button[data-tab]').forEach(tabBtn => {
       tabBtn.onclick = () => {
         state.activeRegistrationsTab = Number(tabBtn.getAttribute('data-tab'));
+        const scrollY = window.scrollY;
         render();
+        window.scrollTo({ top: scrollY, behavior: 'instant' });
       };
     });
 
@@ -2274,7 +2309,9 @@
     if (btnGoUpcoming) {
       btnGoUpcoming.onclick = () => {
         state.activeRegistrationsTab = 0;
+        const scrollY = window.scrollY;
         render();
+        window.scrollTo({ top: scrollY, behavior: 'instant' });
       };
     }
 

@@ -1194,11 +1194,10 @@ tbody tr:hover { background: #fafafa; }
   .support-strip { flex-direction: column; align-items: stretch; }
   .filter-panel { grid-template-columns: 1fr; }
   .filter-panel .field:last-child { grid-column: auto; }
-  .event-card { grid-template-columns: 125px 1fr; display: grid; }
-  .event-card__image { aspect-ratio: auto; height: 100%; }
-  .event-card__image span { display: none; }
-  .event-card__body { padding: 17px; }
-  .event-card__body > p { display: none; }
+  .event-card { flex-direction: column; display: flex; }
+  .event-card__image { display: none; }
+  .event-card__body { padding: 20px; }
+  .event-card__body > p { display: block; }
   .event-card__body .button { margin-top: 13px; }
   .detail-image { height: 240px; }
   .detail-content { padding: 24px; }
@@ -1242,8 +1241,8 @@ tbody tr:hover { background: #fafafa; }
   h1 { font-size: 2rem; }
   .menu-button span { display: none; }
   .hero__content h1 { font-size: 2.35rem; }
-  .event-card { grid-template-columns: 1fr; }
-  .event-card__image { height: 175px; }
+  .event-card { flex-direction: column; display: flex; }
+  .event-card__image { display: none; }
   .event-card__body > p { display: block; }
   .mini-steps, .stat-grid { grid-template-columns: 1fr; }
   .narrow-shell { padding: 40px 16px 65px; }
@@ -1472,13 +1471,33 @@ tbody tr:hover { background: #fafafa; }
   gap: 32px;
   margin-top: 24px;
 }
+.gallery-showcase-layout {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 960px) {
+  .gallery-showcase-layout {
+    grid-template-columns: 1fr;
+  }
+}
+.gallery-side-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+}
 .gallery-featured-card {
   background: #fff;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   overflow: hidden;
-  padding: 28px;
+  padding: 24px;
 }
 .carousel-box {
   position: relative;

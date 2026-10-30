@@ -391,8 +391,6 @@ function renderHeader(activePage = '') {
         <nav class="main-nav" id="mainNav">
           <a href="/events" class="${(activePage === 'events' || activePage === 'portal') ? 'active' : ''}">Event portal</a>
           <a href="/gallery" class="${activePage === 'gallery' ? 'active' : ''}">Gallery</a>
-          <a href="/registrations" class="${activePage === 'registrations' ? 'active' : ''}">My registrations</a>
-          <a href="/events" onclick="window.sessionStorage.setItem('openHelp','1')">Help &amp; support</a>
           <button class="a11y-button" onclick="toggleA11yPanel()">
             ${icons.accessibility} Accessibility
           </button>
@@ -459,7 +457,7 @@ function renderFooter() {
       <div>
         <strong>Event portal</strong>
         <a href="/events">Discover events</a>
-        <a href="/registrations">My registrations</a>
+        <a href="/events#myRegistrationsSection">My registrations</a>
       </div>
       <div>
         <strong>Support</strong>
@@ -568,11 +566,8 @@ function renderAdminSidebar(activeItem = 'dashboard') {
         <a href="/admin" class="${activeItem === 'dashboard' ? 'active' : ''}">
           ${icons.barChart} Dashboard
         </a>
-        <a href="/admin/events" class="${activeItem === 'events' ? 'active' : ''}">
+        <a href="/admin/events" class="${(activeItem === 'events' || activeItem === 'create') ? 'active' : ''}">
           ${icons.calendar} Manage Events &amp; Gallery
-        </a>
-        <a href="/admin/events/create" class="${activeItem === 'create' ? 'active' : ''}">
-          ${icons.plus} Create Event
         </a>
         <a href="/admin/registrations" class="${activeItem === 'registrations' ? 'active' : ''}">
           ${icons.ticketCheck} Registrations
