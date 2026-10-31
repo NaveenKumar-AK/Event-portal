@@ -73,6 +73,34 @@
                   <label for="longDescription">Detailed Description <span style="color:var(--error);">*</span></label>
                   <textarea id="longDescription" rows="5" required placeholder="Full information about the schedule, syllabus, requirements, speaker bios..."></textarea>
                 </div>
+
+                <div class="field" style="grid-column: 1 / -1;">
+                  <label>Event Cover Photo (Upload from Device)</label>
+                  <div class="upload-dropzone" id="coverImageDropzone" onclick="document.getElementById('coverImageFileInput').click()">
+                    <input type="file" id="coverImageFileInput" accept="image/*" style="display:none;" onchange="handleCoverImageSelect(event)">
+                    <div id="coverDropPrompt">
+                      <span style="display:inline-block;margin-bottom:6px;">${icons.image}</span>
+                      <p style="margin:0 0 4px;font-weight:700;font-size:0.95rem;color:var(--text);">Click to choose event cover photo from your device</p>
+                      <small style="color:var(--muted);">Supports PNG, JPG, JPEG, WEBP (or drag and drop here)</small>
+                    </div>
+                    <div id="coverDropPreview" style="display:none;align-items:center;gap:14px;text-align:left;">
+                      <img id="coverPreviewImg" src="" alt="Selected cover" style="width:80px;height:56px;object-fit:cover;border-radius:8px;border:1px solid var(--border);">
+                      <div style="flex:1;min-width:0;">
+                        <strong id="coverFileName" style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:0.9rem;color:var(--text);">image.jpg</strong>
+                        <small id="coverFileSize" style="color:var(--muted);font-size:0.8rem;">0 KB</small>
+                      </div>
+                      <button type="button" class="button button--ghost" onclick="event.stopPropagation(); clearCoverImage();" style="color:var(--error);padding:4px 8px;font-size:0.82rem;">Remove</button>
+                    </div>
+                  </div>
+                  <div style="margin-top:8px;">
+                    <button type="button" class="button button--ghost" onclick="toggleCoverUrlInput()" id="toggleCoverUrlBtn" style="padding:2px 0;font-size:0.82rem;color:var(--primary);text-decoration:underline;">
+                      + Or provide an external image URL
+                    </button>
+                    <div id="coverUrlWrap" style="display:none;margin-top:8px;">
+                      <input type="url" id="coverImageUrl" placeholder="https://images.unsplash.com/photo-..." oninput="handleCoverUrlChange()">
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <!-- Section 2: Date, Time & Venue -->
@@ -99,12 +127,26 @@
                 </div>
 
                 <div class="field">
+                  <label for="stateSelect">State <span style="color:var(--error);">*</span></label>
+                  <select id="stateSelect" required onchange="handleStateSelectChange()">
+                    <option value="">Select State...</option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label for="districtSelect">District <span style="color:var(--error);">*</span></label>
+                  <select id="districtSelect" required onchange="handleDistrictSelectChange()">
+                    <option value="">Select State first...</option>
+                  </select>
+                </div>
+
+                <div class="field">
                   <label for="venue">Venue Name <span style="color:var(--error);">*</span></label>
                   <input type="text" id="venue" required placeholder="e.g. APJ Abdul Kalam Auditorium, Block A">
                 </div>
 
                 <div class="field">
-                  <label for="city">City <span style="color:var(--error);">*</span></label>
+                  <label for="city">City / Area <span style="color:var(--error);">*</span></label>
                   <input type="text" id="city" required placeholder="e.g. Chennai">
                 </div>
 
@@ -201,6 +243,101 @@
       </div>
       ${renderA11yPanel()}
     `;
+
+    // ─── Cover Image Upload Logic ───
+    let selectedCoverImageData = '';
+
+    function handleCoverImageSelect(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      processCoverFile(file);
+    }
+
+    function processCoverFile(file) {
+      if (!file.type.startsWith('image/')) {
+        alert('Please choose an image file (PNG, JPG, JPEG, WEBP).');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        selectedCoverImageData = e.target.result;
+        document.getElementById('coverPreviewImg').src = selectedCoverImageData;
+        document.getElementById('coverFileName').textContent = file.name;
+        document.getElementById('coverFileSize').textContent = (file.size / 1024).toFixed(1) + ' KB';
+        document.getElementById('coverDropPrompt').style.display = 'none';
+        document.getElementById('coverDropPreview').style.display = 'flex';
+        const urlInput = document.getElementById('coverImageUrl');
+        if (urlInput) urlInput.value = '';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function clearCoverImage() {
+      selectedCoverImageData = '';
+      const input = document.getElementById('coverImageFileInput');
+      if (input) input.value = '';
+      const prompt = document.getElementById('coverDropPrompt');
+      const preview = document.getElementById('coverDropPreview');
+      if (prompt) prompt.style.display = 'block';
+      if (preview) preview.style.display = 'none';
+      const previewImg = document.getElementById('coverPreviewImg');
+      if (previewImg) previewImg.src = '';
+    }
+
+    function toggleCoverUrlInput() {
+      const wrap = document.getElementById('coverUrlWrap');
+      const btn = document.getElementById('toggleCoverUrlBtn');
+      if (!wrap) return;
+      if (wrap.style.display === 'none' || !wrap.style.display) {
+        wrap.style.display = 'block';
+        btn.textContent = '– Hide external image URL';
+      } else {
+        wrap.style.display = 'none';
+        btn.textContent = '+ Or provide an external image URL';
+      }
+    }
+
+    function handleCoverUrlChange() {
+      const val = document.getElementById('coverImageUrl').value.trim();
+      if (val) {
+        clearCoverImage();
+      }
+    }
+
+    // ─── Indian States & Districts Cascade Logic ───
+    function populateIndianStates() {
+      const stateSelect = document.getElementById('stateSelect');
+      if (!stateSelect || typeof INDIAN_LOCATIONS === 'undefined') return;
+
+      const states = Object.keys(INDIAN_LOCATIONS).sort();
+      stateSelect.innerHTML = '<option value="">Select State...</option>' + 
+        states.map(s => `<option value="${s}">${s}</option>`).join('');
+    }
+
+    function handleStateSelectChange() {
+      const stateSelect = document.getElementById('stateSelect');
+      const districtSelect = document.getElementById('districtSelect');
+      const selectedState = stateSelect.value;
+
+      if (!selectedState || !INDIAN_LOCATIONS[selectedState]) {
+        districtSelect.innerHTML = '<option value="">Select State first...</option>';
+        districtSelect.disabled = true;
+        return;
+      }
+
+      districtSelect.disabled = false;
+      const districts = INDIAN_LOCATIONS[selectedState];
+      districtSelect.innerHTML = '<option value="">Select District...</option>' + 
+        districts.map(d => `<option value="${d}">${d}</option>`).join('');
+    }
+
+    function handleDistrictSelectChange() {
+      const districtSelect = document.getElementById('districtSelect');
+      const cityInput = document.getElementById('city');
+      if (districtSelect.value && (!cityInput.value || cityInput.value === districtSelect.value)) {
+        cityInput.value = districtSelect.value;
+      }
+    }
 
     // ─── Leaflet Map Pin Picker Logic ───
     let pickerMap = null;
@@ -304,8 +441,34 @@
       }
     }
 
-    // Initialize map immediately after DOM insertion
+    // Initialize states and map immediately after DOM insertion
+    populateIndianStates();
     initLocationPickerMap();
+
+    // Setup drag and drop for cover image dropzone
+    const coverDropzone = document.getElementById('coverImageDropzone');
+    if (coverDropzone) {
+      ['dragenter', 'dragover'].forEach(name => {
+        coverDropzone.addEventListener(name, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          coverDropzone.classList.add('dragover');
+        }, false);
+      });
+      ['dragleave', 'drop'].forEach(name => {
+        coverDropzone.addEventListener(name, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          coverDropzone.classList.remove('dragover');
+        }, false);
+      });
+      coverDropzone.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        if (dt && dt.files && dt.files[0]) {
+          processCoverFile(dt.files[0]);
+        }
+      }, false);
+    }
 
     async function handleCreateEvent(e) {
       e.preventDefault();
@@ -321,11 +484,17 @@
       const reqRaw = document.getElementById('requirements').value;
       const requirements = reqRaw ? reqRaw.split(',').map(s => s.trim()).filter(Boolean) : ['Valid ID proof'];
 
+      const coverUrlInput = document.getElementById('coverImageUrl')?.value?.trim() || '';
+      const finalImage = selectedCoverImageData || coverUrlInput;
+
       const payload = {
         title: document.getElementById('title').value,
         category: document.getElementById('category').value,
         description: document.getElementById('description').value,
         longDescription: document.getElementById('longDescription').value,
+        image: finalImage,
+        state: document.getElementById('stateSelect').value,
+        district: document.getElementById('districtSelect').value,
         date: document.getElementById('date').value,
         endDate: document.getElementById('endDate').value,
         time: document.getElementById('time').value,
@@ -346,6 +515,9 @@
         requirements,
         coordinates: {
           lat: parseFloat(document.getElementById('pinnedLat').value) || 13.0827,
+          lng: parseFloat(document.getElementById('pinnedLng').value) || 80.2707
+        }
+      };
           lng: parseFloat(document.getElementById('pinnedLng').value) || 80.2707
         }
       };

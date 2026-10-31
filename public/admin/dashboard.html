@@ -144,23 +144,23 @@
 
           return `
           <tr>
-            <td>
+            <td data-label="Event Details">
               <strong>${e.title}</strong>
               <span class="table-sub">${e.category}</span>
             </td>
-            <td>
+            <td data-label="Date & Time">
               <strong>${formatDateShort(e.date)}</strong>
               <span class="table-sub">${e.time || '10:00 AM'}</span>
             </td>
-            <td>${e.venue || e.location || 'Civic Hall'}</td>
-            <td>
+            <td data-label="Venue">${e.venue || e.location || 'Civic Hall'}</td>
+            <td data-label="Registration Status">
               <div style="font-weight:700;font-size:0.9rem;">${regCount} / ${e.capacity || 0} (${pct}%)</div>
               <div style="width:100px;background:#e5e7eb;height:6px;border-radius:3px;margin-top:4px;overflow:hidden;">
                 <div style="width:${pct}%;background:var(--primary);height:100%;"></div>
               </div>
             </td>
-            <td>${renderStatus(e.status)}</td>
-            <td>
+            <td data-label="Status">${renderStatus(e.status)}</td>
+            <td data-label="Action">
               <a href="/events/${e.id}" class="table-action" target="_blank">${icons.eye} View</a>
             </td>
           </tr>
@@ -177,18 +177,18 @@
           const pName = r.fullName || `${r.firstName || ''} ${r.lastName || ''}`.trim() || 'Attendee';
           return `
           <tr>
-            <td><code><strong>${r.referenceId}</strong></code></td>
-            <td>
+            <td data-label="Ref ID"><code><strong>${r.referenceId}</strong></code></td>
+            <td data-label="Participant">
               <strong>${pName}</strong>
               <span class="table-sub">${r.email || ''}</span>
             </td>
-            <td>
+            <td data-label="Event">
               <strong>${r.eventTitle}</strong>
               <span class="table-sub">${formatDateShort(r.eventDate)}</span>
             </td>
-            <td>${formatDateShort(r.registeredAt)}</td>
-            <td>${renderStatus(r.status)}</td>
-            <td>
+            <td data-label="Registered On">${formatDateShort(r.registeredAt)}</td>
+            <td data-label="Status">${renderStatus(r.status)}</td>
+            <td data-label="Action">
               <select onchange="updateRegStatus('${r.id}', this.value)" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border);font-size:0.85rem;">
                 <option value="confirmed" ${r.status === 'confirmed' ? 'selected' : ''}>Confirmed</option>
                 <option value="pending" ${r.status === 'pending' ? 'selected' : ''}>Pending</option>

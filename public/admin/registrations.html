@@ -17,6 +17,9 @@
 
     let allRegistrations = [];
     let allEvents = [];
+    let currentRegPage = 1;
+    const regPerPage = 8;
+    let currentlyFilteredRegs = [];
 
     // Check URL params for preselected eventId
     const urlParams = new URLSearchParams(window.location.search);
@@ -78,6 +81,7 @@
               </tbody>
             </table>
           </div>
+          <div id="registrationsPaginationContainer"></div>
         </main>
       </div>
 
@@ -118,29 +122,42 @@
     }
 
     function renderRegistrationsTable(list) {
+      currentlyFilteredRegs = list;
       const tbody = document.getElementById('registrationsListBody');
+      const pagWrap = document.getElementById('registrationsPaginationContainer');
+
       if (list.length === 0) {
         tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted);">No matching registrations found.</td></tr>';
+        if (pagWrap) pagWrap.innerHTML = '';
         return;
       }
 
-      tbody.innerHTML = list.map(r => `
+      const totalItems = list.length;
+      const totalPages = Math.ceil(totalItems / regPerPage) || 1;
+      if (currentRegPage > totalPages) currentRegPage = totalPages;
+      if (currentRegPage < 1) currentRegPage = 1;
+
+      const startIdx = (currentRegPage - 1) * regPerPage;
+      const endIdx = Math.min(startIdx + regPerPage, totalItems);
+      const paged = list.slice(startIdx, endIdx);
+
+      tbody.innerHTML = paged.map(r => `
         <tr>
-          <td><code style="font-weight:700;color:var(--primary);background:var(--very-light);padding:2px 6px;border-radius:4px;">${r.referenceId}</code></td>
-          <td>
+          <td data-label="Ref ID"><code style="font-weight:700;color:var(--primary);background:var(--very-light);padding:2px 6px;border-radius:4px;">${r.referenceId}</code></td>
+          <td data-label="Attendee">
             <strong>${r.fullName || (r.firstName ? `${r.firstName} ${r.lastName || ''}`.trim() : 'Jane Doe')}</strong>
             <span class="table-sub">${r.organization || r.department || 'Individual'} • ${r.role || 'Attendee'}</span>
           </td>
-          <td>
+          <td data-label="Contact Info">
             <span>${r.email}</span>
             <span class="table-sub">${r.phone}</span>
           </td>
-          <td>
+          <td data-label="Event">
             <strong>${r.eventTitle}</strong>
             <span class="table-sub">${formatDateShort(r.eventDate)}</span>
           </td>
-          <td>${formatDateShort(r.registeredAt)}</td>
-          <td>
+          <td data-label="Registered Date">${formatDateShort(r.registeredAt)}</td>
+          <td data-label="Status">
             <select onchange="updateRegStatus('${r.id}', this.value)" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border);font-size:0.85rem;font-weight:600;">
               <option value="Confirmed" ${(r.status || '').toLowerCase() === 'confirmed' ? 'selected' : ''}>Confirmed</option>
               <option value="Attended" ${(r.status || '').toLowerCase() === 'attended' ? 'selected' : ''}>Attended</option>
@@ -148,11 +165,29 @@
               <option value="Cancelled" ${(r.status || '').toLowerCase() === 'cancelled' ? 'selected' : ''}>Cancelled</option>
             </select>
           </td>
-          <td>
+          <td data-label="Details">
             <button onclick="viewDetails('${r.id}')" class="table-action">${icons.eye} View</button>
           </td>
         </tr>
       `).join('');
+
+      if (pagWrap) {
+        pagWrap.innerHTML = renderW3PaginationHTML({
+          currentPage: currentRegPage,
+          totalPages: totalPages,
+          totalItems: totalItems,
+          itemsPerPage: regPerPage,
+          onPageChange: 'changeRegPage',
+          itemLabel: 'registrations'
+        });
+      }
+    }
+
+    function changeRegPage(page) {
+      currentRegPage = page;
+      renderRegistrationsTable(currentlyFilteredRegs);
+      const tableWrap = document.querySelector('.table-wrap');
+      if (tableWrap) tableWrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function filterRegistrations() {
@@ -171,6 +206,7 @@
         return matchesQuery && matchesEvent && matchesStatus;
       });
 
+      currentRegPage = 1;
       renderRegistrationsTable(filtered);
     }
 

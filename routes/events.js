@@ -5,7 +5,7 @@ const { events, calculateDistanceKm, calculateETA } = require('../data/store');
 // GET /api/events — list all events, with optional filters
 router.get('/', (req, res) => {
   let result = [...events];
-  const { search, category, date, city, status } = req.query;
+  const { search, category, date, city, status, state, district } = req.query;
 
   if (search) {
     const q = search.toLowerCase();
@@ -23,6 +23,23 @@ router.get('/', (req, res) => {
   }
   if (city && city !== 'all') {
     result = result.filter(e => e.city && e.city.toLowerCase() === city.toLowerCase());
+  }
+  if (state && state !== 'all' && state !== 'All States') {
+    const sLower = state.toLowerCase();
+    result = result.filter(e =>
+      (e.state && e.state.toLowerCase() === sLower) ||
+      (e.address && e.address.toLowerCase().includes(sLower)) ||
+      (e.location && e.location.toLowerCase().includes(sLower))
+    );
+  }
+  if (district && district !== 'all' && !district.startsWith('All Districts')) {
+    const dLower = district.toLowerCase();
+    result = result.filter(e =>
+      (e.district && e.district.toLowerCase() === dLower) ||
+      (e.city && e.city.toLowerCase() === dLower) ||
+      (e.address && e.address.toLowerCase().includes(dLower)) ||
+      (e.location && e.location.toLowerCase().includes(dLower))
+    );
   }
   if (status && status !== 'all') {
     result = result.filter(e => e.status === status);

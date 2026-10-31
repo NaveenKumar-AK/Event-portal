@@ -24,7 +24,15 @@
     searchQuery: '',
     categoryFilter: 'All categories',
     dateFilter: 'Any date',
+    selectedState: 'All States',
+    selectedDistrict: 'All Districts',
     locationFilter: 'All locations',
+    eventsCurrentPage: 1,
+    eventsPerPage: 6,
+    registrationsCurrentPage: 1,
+    registrationsPerPage: 5,
+    albumsCurrentPage: 1,
+    albumsPerPage: 6,
     calendarDate: new Date(2026, 9, 1), // October 2026
     selectedCalendarDate: '2026-10-15',
     activeRegistrationsTab: 0,
@@ -915,11 +923,31 @@
 
   // View: Discover Events
   function renderEventsView() {
+    const locData = typeof INDIAN_LOCATIONS !== 'undefined' ? INDIAN_LOCATIONS : {};
+    const allIndianStates = Object.keys(locData).sort();
+    const availableDistricts = (state.selectedState && locData[state.selectedState]) ? locData[state.selectedState] : [];
+
     let filtered = state.events.filter(e => {
       const q = state.searchQuery.toLowerCase();
       const matchesSearch = !q || e.title.toLowerCase().includes(q) || e.description.toLowerCase().includes(q);
       const matchesCat = state.categoryFilter === 'All categories' || e.category === state.categoryFilter;
-      const matchesLoc = state.locationFilter === 'All locations' || e.location.includes(state.locationFilter);
+
+      let matchesState = true;
+      if (state.selectedState && state.selectedState !== 'All States') {
+        const sLower = state.selectedState.toLowerCase();
+        matchesState = (e.state && e.state.toLowerCase() === sLower) ||
+                       (e.address && e.address.toLowerCase().includes(sLower)) ||
+                       (e.location && e.location.toLowerCase().includes(sLower));
+      }
+
+      let matchesDistrict = true;
+      if (state.selectedDistrict && !state.selectedDistrict.startsWith('All Districts')) {
+        const dLower = state.selectedDistrict.toLowerCase();
+        matchesDistrict = (e.district && e.district.toLowerCase() === dLower) ||
+                          (e.city && e.city.toLowerCase() === dLower) ||
+                          (e.address && e.address.toLowerCase().includes(dLower)) ||
+                          (e.location && e.location.toLowerCase().includes(dLower));
+      }
 
       let matchesDate = true;
       if (state.dateFilter === 'This week') {
@@ -929,8 +957,18 @@
         matchesDate = e.date.startsWith('2026-10');
       }
 
-      return matchesSearch && matchesCat && matchesLoc && matchesDate;
+      return matchesSearch && matchesCat && matchesState && matchesDistrict && matchesDate;
     });
+
+    const totalEvents = filtered.length;
+    const perPage = state.eventsPerPage || 6;
+    const totalPages = Math.ceil(totalEvents / perPage) || 1;
+    if (state.eventsCurrentPage > totalPages) state.eventsCurrentPage = totalPages;
+    if (state.eventsCurrentPage < 1) state.eventsCurrentPage = 1;
+
+    const startIdx = (state.eventsCurrentPage - 1) * perPage;
+    const endIdx = Math.min(startIdx + perPage, totalEvents);
+    const paginatedEvents = filtered.slice(startIdx, endIdx);
 
     return `
       <main class="page-shell">
@@ -977,13 +1015,25 @@
             </div>
           </div>
           <div class="field">
-            <label for="location-select">Location</label>
+            <label for="state-select">State</label>
             <div class="select-wrap">
-              <select id="location-select">
-                <option ${state.locationFilter === 'All locations' ? 'selected' : ''}>All locations</option>
-                <option ${state.locationFilter === 'Community Learning Centre' ? 'selected' : ''}>Community Learning Centre</option>
-                <option ${state.locationFilter === 'Civic Hall' ? 'selected' : ''}>Civic Hall</option>
-                <option ${state.locationFilter === 'Riverside Sports Centre' ? 'selected' : ''}>Riverside Sports Centre</option>
+              <select id="state-select">
+                <option value="All States" ${state.selectedState === 'All States' ? 'selected' : ''}>All States</option>
+                ${allIndianStates.map(st => `
+                  <option value="${st}" ${state.selectedState === st ? 'selected' : ''}>${st}</option>
+                `).join('')}
+              </select>
+              ${icons.chevronDown}
+            </div>
+          </div>
+          <div class="field">
+            <label for="district-select">District</label>
+            <div class="select-wrap">
+              <select id="district-select" ${state.selectedState === 'All States' ? 'disabled' : ''}>
+                <option value="All Districts">${state.selectedState === 'All States' ? 'Select State first' : `All Districts in ${state.selectedState}`}</option>
+                ${availableDistricts.map(dt => `
+                  <option value="${dt}" ${state.selectedDistrict === dt ? 'selected' : ''}>${dt}</option>
+                `).join('')}
               </select>
               ${icons.chevronDown}
             </div>
@@ -992,13 +1042,21 @@
 
         <div class="results-heading">
           <h2>Upcoming events</h2>
-          <span>${filtered.length} events found</span>
+          <span>${totalEvents === 0 ? '0 events found' : `Showing ${startIdx + 1}&ndash;${endIdx} of ${totalEvents} events`}</span>
         </div>
 
         ${filtered.length > 0 ? `
           <div class="event-grid">
-            ${filtered.map(renderEventCard).join('')}
+            ${paginatedEvents.map(renderEventCard).join('')}
           </div>
+          ${totalPages > 1 ? renderW3PaginationHTML({
+            currentPage: state.eventsCurrentPage,
+            totalPages: totalPages,
+            totalItems: totalEvents,
+            itemsPerPage: perPage,
+            datasetAttr: 'data-events-page',
+            itemLabel: 'events'
+          }) : ''}
         ` : `
           <div class="empty-state">
             ${icons.search}
@@ -1310,6 +1368,16 @@
     else if (activeTab === 1) items = state.pastRegistrations;
     else if (activeTab === 2) items = state.cancelledRegistrations;
 
+    const totalRegs = items.length;
+    const regPerPage = state.registrationsPerPage || 5;
+    const totalRegPages = Math.ceil(totalRegs / regPerPage) || 1;
+    if (state.registrationsCurrentPage > totalRegPages) state.registrationsCurrentPage = totalRegPages;
+    if (state.registrationsCurrentPage < 1) state.registrationsCurrentPage = 1;
+
+    const startRegIdx = (state.registrationsCurrentPage - 1) * regPerPage;
+    const endRegIdx = Math.min(startRegIdx + regPerPage, totalRegs);
+    const paginatedRegs = items.slice(startRegIdx, endRegIdx);
+
     return `
       <section class="registrations-section" id="myRegistrationsSection" aria-labelledby="registrations-title" style="margin-top:56px;scroll-margin-top:100px;">
         <div class="calendar-section__heading" style="margin-bottom:20px;">
@@ -1336,7 +1404,7 @@
         </div>
 
         <div class="list-card">
-          ${items.length > 0 ? items.map((reg) => {
+          ${items.length > 0 ? paginatedRegs.map((reg) => {
             const ev = reg.event;
             const dayNum = ev && ev.date ? ev.date.slice(-2) : '15';
             return `
@@ -1402,6 +1470,14 @@
             </div>
           `}
         </div>
+        ${totalRegPages > 1 ? renderW3PaginationHTML({
+          currentPage: state.registrationsCurrentPage,
+          totalPages: totalRegPages,
+          totalItems: totalRegs,
+          itemsPerPage: regPerPage,
+          datasetAttr: 'data-reg-page',
+          itemLabel: 'registrations'
+        }) : ''}
       </section>
     `;
   }
@@ -1508,6 +1584,16 @@
       caption: cur ? cur.title : 'Community Event',
       alt: cur ? cur.alt : 'Community Event'
     };
+
+    const totalAlbums = eventsWithPhotos.length;
+    const albumsPerPage = state.albumsPerPage || 6;
+    const totalAlbumPages = Math.ceil(totalAlbums / albumsPerPage) || 1;
+    if (state.albumsCurrentPage > totalAlbumPages) state.albumsCurrentPage = totalAlbumPages;
+    if (state.albumsCurrentPage < 1) state.albumsCurrentPage = 1;
+
+    const startAlbumIdx = (state.albumsCurrentPage - 1) * albumsPerPage;
+    const endAlbumIdx = Math.min(startAlbumIdx + albumsPerPage, totalAlbums);
+    const paginatedAlbums = eventsWithPhotos.slice(startAlbumIdx, endAlbumIdx);
 
     return `
       <main class="page-shell">
@@ -1627,11 +1713,11 @@
         <div style="margin-top:48px;">
           <div class="results-heading">
             <h2>All Event Photo Albums</h2>
-            <span>${eventsWithPhotos.length} events with photos</span>
+            <span>${totalAlbums === 0 ? '0 albums' : `Showing ${startAlbumIdx + 1}&ndash;${endAlbumIdx} of ${totalAlbums} albums`}</span>
           </div>
 
           <div class="album-grid">
-            ${eventsWithPhotos.map(ev => {
+            ${paginatedAlbums.map(ev => {
               const isActive = cur && ev.id === cur.id;
               const photoCount = ev.gallery ? ev.gallery.length : 0;
               const coverImg = ev.gallery && ev.gallery[0] ? ev.gallery[0].url : ev.image;
@@ -1663,6 +1749,14 @@
               `;
             }).join('')}
           </div>
+          ${totalAlbumPages > 1 ? renderW3PaginationHTML({
+            currentPage: state.albumsCurrentPage,
+            totalPages: totalAlbumPages,
+            totalItems: totalAlbums,
+            itemsPerPage: albumsPerPage,
+            datasetAttr: 'data-albums-page',
+            itemLabel: 'albums'
+          }) : ''}
         </div>
       </main>
     `;
@@ -2068,19 +2162,12 @@
     if (searchInput) {
       searchInput.oninput = (e) => {
         state.searchQuery = e.target.value;
-        const grid = document.querySelector('.event-grid');
-        const countSpan = document.querySelector('.results-heading span');
-        let filtered = state.events.filter(item => {
-          const q = state.searchQuery.toLowerCase();
-          const matchesSearch = !q || item.title.toLowerCase().includes(q) || item.description.toLowerCase().includes(q);
-          const matchesCat = state.categoryFilter === 'All categories' || item.category === state.categoryFilter;
-          const matchesLoc = state.locationFilter === 'All locations' || item.location.includes(state.locationFilter);
-          return matchesSearch && matchesCat && matchesLoc;
-        });
-        if (countSpan) countSpan.textContent = `${filtered.length} events found`;
-        if (grid) {
-          grid.innerHTML = filtered.map(renderEventCard).join('');
-          bindDetailButtons();
+        state.eventsCurrentPage = 1;
+        render();
+        const input = document.getElementById('event-search');
+        if (input) {
+          input.focus();
+          input.setSelectionRange(input.value.length, input.value.length);
         }
       };
     }
@@ -2089,6 +2176,7 @@
     if (catSelect) {
       catSelect.onchange = (e) => {
         state.categoryFilter = e.target.value;
+        state.eventsCurrentPage = 1;
         render();
       };
     }
@@ -2097,6 +2185,26 @@
     if (dateSelect) {
       dateSelect.onchange = (e) => {
         state.dateFilter = e.target.value;
+        state.eventsCurrentPage = 1;
+        render();
+      };
+    }
+
+    const stateSelect = document.getElementById('state-select');
+    if (stateSelect) {
+      stateSelect.onchange = (e) => {
+        state.selectedState = e.target.value;
+        state.selectedDistrict = 'All Districts';
+        state.eventsCurrentPage = 1;
+        render();
+      };
+    }
+
+    const districtSelect = document.getElementById('district-select');
+    if (districtSelect) {
+      districtSelect.onchange = (e) => {
+        state.selectedDistrict = e.target.value;
+        state.eventsCurrentPage = 1;
         render();
       };
     }
@@ -2105,6 +2213,7 @@
     if (locSelect) {
       locSelect.onchange = (e) => {
         state.locationFilter = e.target.value;
+        state.eventsCurrentPage = 1;
         render();
       };
     }
@@ -2115,10 +2224,50 @@
         state.searchQuery = '';
         state.categoryFilter = 'All categories';
         state.dateFilter = 'Any date';
+        state.selectedState = 'All States';
+        state.selectedDistrict = 'All Districts';
         state.locationFilter = 'All locations';
+        state.eventsCurrentPage = 1;
         render();
       };
     }
+
+    // W3Schools Pagination Click Handlers
+    document.querySelectorAll('[data-events-page]').forEach(btn => {
+      btn.onclick = () => {
+        const page = Number(btn.getAttribute('data-events-page'));
+        if (page && page !== state.eventsCurrentPage) {
+          state.eventsCurrentPage = page;
+          render();
+          const target = document.querySelector('.results-heading') || document.querySelector('.event-grid');
+          if (target) target.scrollIntoView({ behavior: state.reduceMotion ? 'auto' : 'smooth', block: 'start' });
+        }
+      };
+    });
+
+    document.querySelectorAll('[data-reg-page]').forEach(btn => {
+      btn.onclick = () => {
+        const page = Number(btn.getAttribute('data-reg-page'));
+        if (page && page !== state.registrationsCurrentPage) {
+          state.registrationsCurrentPage = page;
+          render();
+          const target = document.getElementById('myRegistrationsSection');
+          if (target) target.scrollIntoView({ behavior: state.reduceMotion ? 'auto' : 'smooth', block: 'start' });
+        }
+      };
+    });
+
+    document.querySelectorAll('[data-albums-page]').forEach(btn => {
+      btn.onclick = () => {
+        const page = Number(btn.getAttribute('data-albums-page'));
+        if (page && page !== state.albumsCurrentPage) {
+          state.albumsCurrentPage = page;
+          render();
+          const target = document.querySelector('.album-grid');
+          if (target) target.scrollIntoView({ behavior: state.reduceMotion ? 'auto' : 'smooth', block: 'start' });
+        }
+      };
+    });
 
     // Calendar buttons
     const calPrev = document.getElementById('calPrevMonthBtn');
@@ -2299,6 +2448,7 @@
     document.querySelectorAll('.tabs button[data-tab]').forEach(tabBtn => {
       tabBtn.onclick = () => {
         state.activeRegistrationsTab = Number(tabBtn.getAttribute('data-tab'));
+        state.registrationsCurrentPage = 1;
         const scrollY = window.scrollY;
         render();
         window.scrollTo({ top: scrollY, behavior: 'instant' });
@@ -2309,6 +2459,7 @@
     if (btnGoUpcoming) {
       btnGoUpcoming.onclick = () => {
         state.activeRegistrationsTab = 0;
+        state.registrationsCurrentPage = 1;
         const scrollY = window.scrollY;
         render();
         window.scrollTo({ top: scrollY, behavior: 'instant' });

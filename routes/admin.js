@@ -1,7 +1,34 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
+const fs = require('fs');
+const path = require('path');
 const { events, registrations, locations, adminUser, adminSessions, calculateDistanceKm, calculateETA } = require('../data/store');
+
+// Helper to save base64 image data from client device into public/uploads
+function saveBase64Image(dataString, prefix = 'upload') {
+  if (!dataString || typeof dataString !== 'string') return dataString;
+  const match = dataString.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+  if (!match) return dataString; // Return as-is if already a valid URL or path
+
+  const rawExt = match[1].toLowerCase();
+  const ext = (rawExt === 'jpeg' || rawExt === 'jpg') ? 'jpg' : (rawExt === 'png' ? 'png' : (rawExt === 'webp' ? 'webp' : 'jpg'));
+  const base64Data = match[2];
+  const buffer = Buffer.from(base64Data, 'base64');
+
+  const uploadDir = path.join(__dirname, '../public/uploads');
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+
+  const filename = `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
+  const filePath = path.join(uploadDir, filename);
+  fs.writeFileSync(filePath, buffer);
+
+  return `/uploads/${filename}`;
+}
+
+router.saveBase64Image = saveBase64Image;
 
 // GET /api/admin/setup-status — checks if first-time administrator password setup is available
 router.get('/setup-status', (req, res) => {
@@ -124,6 +151,21 @@ router.get('/events', (req, res) => {
   res.json({ success: true, events: enriched });
 });
 
+// POST /api/admin/upload — upload image from admin device
+router.post('/upload', (req, res) => {
+  try {
+    const { image, name } = req.body;
+    if (!image) {
+      return res.status(400).json({ success: false, message: 'No image data provided' });
+    }
+    const savedUrl = saveBase64Image(image, 'img');
+    res.json({ success: true, url: savedUrl, message: 'Image uploaded from device successfully' });
+  } catch (err) {
+    console.error('Error uploading image:', err);
+    res.status(500).json({ success: false, message: 'Failed to upload image' });
+  }
+});
+
 // POST /api/admin/events — create a new event with location mapping
 router.post('/events', (req, res) => {
   const hostObj = typeof req.body.host === 'object' ? req.body.host : { name: req.body.host || 'Community Support Team' };
@@ -131,10 +173,17 @@ router.post('/events', (req, res) => {
 
   const venueName = req.body.venue || req.body.location || 'Civic Hall';
   const cityName = req.body.city || '';
-  const addressText = req.body.address || (cityName ? `${venueName}, ${cityName}` : venueName);
+  const stateName = req.body.state || 'Tamil Nadu';
+  const districtName = req.body.district || cityName || 'Chennai';
+  const addressText = req.body.address || (cityName ? `${venueName}, ${cityName}, ${stateName}` : venueName);
   const coords = (req.body.coordinates && req.body.coordinates.lat)
     ? req.body.coordinates
     : (req.body.lat && req.body.lng ? { lat: Number(req.body.lat), lng: Number(req.body.lng) } : null);
+
+  let coverImage = req.body.image || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=900&q=80';
+  if (coverImage && coverImage.startsWith('data:image/')) {
+    coverImage = saveBase64Image(coverImage, 'event-cover');
+  }
 
   const newEvent = {
     id: events.length + 1,
@@ -144,6 +193,8 @@ router.post('/events', (req, res) => {
     location: venueName,
     venue: venueName,
     city: cityName,
+    district: districtName,
+    state: stateName,
     address: addressText,
     coordinates: coords,
     startTime: req.body.startTime || req.body.time || '10:00 AM',
@@ -154,7 +205,7 @@ router.post('/events', (req, res) => {
     remainingPlaces: req.body.capacity || 30,
     status: req.body.status || 'upcoming',
     isFeatured: Boolean(req.body.isFeatured),
-    image: req.body.image || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=900&q=80',
+    image: coverImage,
     alt: req.body.title || 'Community event',
     gallery: [],
     feedbackActive: false,
@@ -227,21 +278,30 @@ router.put('/events/:id', (req, res) => {
   res.json({ success: true, event });
 });
 
-// POST /api/admin/events/:id/gallery — add photo to event gallery
+// POST /api/admin/events/:id/gallery — add photo to event gallery (supports device uploads or URLs)
 router.post('/events/:id/gallery', (req, res) => {
   const event = events.find(e => String(e.id) === String(req.params.id));
   if (!event) return res.status(404).json({ success: false, message: 'Event not found' });
   if (!event.gallery) event.gallery = [];
 
+  let photoUrl = req.body.url || req.body.image;
+  if (!photoUrl) {
+    return res.status(400).json({ success: false, message: 'Photo image or URL is required' });
+  }
+
+  if (photoUrl.startsWith('data:image/')) {
+    photoUrl = saveBase64Image(photoUrl, `ev${event.id}-photo`);
+  }
+
   const photo = {
     id: 'g-' + Date.now(),
-    url: req.body.url,
+    url: photoUrl,
     caption: req.body.caption || event.title,
-    alt: req.body.alt || event.title,
+    alt: req.body.alt || req.body.caption || event.title,
     uploadedAt: new Date().toISOString()
   };
   event.gallery.push(photo);
-  res.status(201).json({ success: true, photo, gallery: event.gallery });
+  res.status(201).json({ success: true, photo, gallery: event.gallery, message: 'Photo uploaded to gallery successfully' });
 });
 
 // DELETE /api/admin/events/:id/gallery/:photoId — delete photo

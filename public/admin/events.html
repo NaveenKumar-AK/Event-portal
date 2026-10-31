@@ -122,6 +122,9 @@
 
     let allEvents = [];
     let activeModalEventId = null;
+    let currentEventsPage = 1;
+    const eventsPerPage = 6;
+    let currentlyFilteredEvents = [];
 
     document.getElementById('app').innerHTML = `
       <div class="admin-shell">
@@ -188,6 +191,7 @@
               </tbody>
             </table>
           </div>
+          <div id="eventsPaginationContainer"></div>
         </main>
       </div>
       ${renderA11yPanel()}
@@ -220,26 +224,48 @@
           <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:18px;">
             <h3 style="font-size:1.15rem;margin-bottom:8px;">Add Photo to Event</h3>
             
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center;">
-              <span style="font-size:0.85rem;color:var(--muted);font-weight:700;">Quick Presets:</span>
-              <button type="button" class="preset-pill" onclick="applyPhotoPreset('https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&w=1200&q=80', 'Participants practicing with digital tools')">+ Workshop Photo</button>
-              <button type="button" class="preset-pill" onclick="applyPhotoPreset('https://images.unsplash.com/photo-1577495508048-b635879837f1?auto=format&fit=crop&w=1200&q=80', 'Audience engagement in Civic Hall')">+ Forum Photo</button>
-              <button type="button" class="preset-pill" onclick="applyPhotoPreset('https://images.unsplash.com/photo-1517649763962-0c623266ddc0?auto=format&fit=crop&w=1200&q=80', 'Coaches assisting wheelchair participants')">+ Adaptive Sports Photo</button>
-              <button type="button" class="preset-pill" onclick="applyPhotoPreset('https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?auto=format&fit=crop&w=1200&q=80', 'Group commemorative portrait at event conclusion')">+ Group Photo</button>
-            </div>
-
-            <form onsubmit="handleAddPhoto(event)" style="display:grid;gap:12px;">
+            <form onsubmit="handleAddPhoto(event)" style="display:grid;gap:14px;">
+              <!-- Device File Upload Area -->
               <div class="field">
-                <label for="newPhotoUrl">Image URL</label>
-                <input type="url" id="newPhotoUrl" required placeholder="https://images.unsplash.com/photo-...">
+                <label>Upload Photo from Device <span style="color:var(--error);">*</span></label>
+                <div class="upload-dropzone" id="galleryPhotoDropzone" onclick="document.getElementById('galleryFileInput').click()">
+                  <input type="file" id="galleryFileInput" accept="image/*" style="display:none;" onchange="handleGalleryDeviceFileSelect(event)">
+                  <div id="galleryDropPrompt">
+                    <span style="display:inline-block;margin-bottom:6px;">${icons.image}</span>
+                    <p style="margin:0 0 4px;font-weight:700;font-size:0.95rem;color:var(--text);">Click to choose photo from your device</p>
+                    <small style="color:var(--muted);">Supports PNG, JPG, JPEG, WEBP (or drag and drop here)</small>
+                  </div>
+                  <div id="galleryDropPreview" style="display:none;align-items:center;gap:14px;text-align:left;">
+                    <img id="galleryPreviewImg" src="" alt="Selected event photo" style="width:72px;height:54px;object-fit:cover;border-radius:8px;border:1px solid var(--border);">
+                    <div style="flex:1;min-width:0;">
+                      <strong id="galleryFileName" style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:0.9rem;color:var(--text);">image.jpg</strong>
+                      <small id="galleryFileSize" style="color:var(--muted);font-size:0.8rem;">0 KB</small>
+                    </div>
+                    <button type="button" class="button button--ghost" onclick="event.stopPropagation(); clearGalleryDeviceFile();" style="color:var(--error);padding:4px 8px;font-size:0.82rem;">Remove</button>
+                  </div>
+                </div>
               </div>
+
+              <!-- Alternate URL input toggle -->
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <button type="button" class="button button--ghost" onclick="toggleUrlInput()" id="toggleUrlBtn" style="padding:4px 0;font-size:0.82rem;color:var(--primary);text-decoration:underline;">
+                  + Or provide an external Image URL
+                </button>
+              </div>
+
+              <div class="field" id="urlFieldWrap" style="display:none;">
+                <label for="newPhotoUrl">Image URL</label>
+                <input type="url" id="newPhotoUrl" placeholder="https://images.unsplash.com/photo-..." oninput="handleUrlInputChange()">
+              </div>
+
               <div class="field">
-                <label for="newPhotoCaption">Photo Caption / Description</label>
+                <label for="newPhotoCaption">Photo Caption / Description <span style="color:var(--error);">*</span></label>
                 <input type="text" id="newPhotoCaption" required placeholder="Describe what is taking place in this moment...">
               </div>
-              <div style="display:flex;justify-content:flex-end;gap:10px;">
+
+              <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:6px;">
                 <button type="button" class="button button--secondary" onclick="closeGalleryModal()">Done</button>
-                <button type="submit" class="button button--primary">${icons.plus} Upload Photo to Gallery</button>
+                <button type="submit" id="btnUploadGalleryPhoto" class="button button--primary">${icons.plus} Upload Photo to Gallery</button>
               </div>
             </form>
           </div>
@@ -429,37 +455,52 @@
       const res = await api('/api/admin/events');
       if (res.success && res.events) {
         allEvents = res.events;
+        currentEventsPage = 1;
         renderEventsTable(allEvents);
       }
     }
 
     function renderEventsTable(events) {
+      currentlyFilteredEvents = events;
       const tbody = document.getElementById('eventsListBody');
+      const pagWrap = document.getElementById('eventsPaginationContainer');
+
       if (events.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted);">No matching events found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--muted);">No matching events found.</td></tr>';
+        if (pagWrap) pagWrap.innerHTML = '';
         return;
       }
-      tbody.innerHTML = events.map(e => {
+
+      const totalItems = events.length;
+      const totalPages = Math.ceil(totalItems / eventsPerPage) || 1;
+      if (currentEventsPage > totalPages) currentEventsPage = totalPages;
+      if (currentEventsPage < 1) currentEventsPage = 1;
+
+      const startIdx = (currentEventsPage - 1) * eventsPerPage;
+      const endIdx = Math.min(startIdx + eventsPerPage, totalItems);
+      const paged = events.slice(startIdx, endIdx);
+
+      tbody.innerHTML = paged.map(e => {
         const photoCount = e.gallery ? e.gallery.length : 0;
         const isFbActive = Boolean(e.feedbackActive);
         const respCount = e.feedbackResponses ? e.feedbackResponses.length : 0;
 
         return `
           <tr>
-            <td>
+            <td data-label="Event Title & Host">
               <strong>${e.title}</strong>
               <span class="table-sub">${typeof e.host === 'object' ? (e.host.name || 'Organizer') : (e.host || 'Organizer')}</span>
             </td>
-            <td><span style="font-weight:700;font-size:0.85rem;color:var(--primary);">${e.category}</span></td>
-            <td>
+            <td data-label="Category"><span style="font-weight:700;font-size:0.85rem;color:var(--primary);">${e.category}</span></td>
+            <td data-label="Date & Time">
               <strong>${formatDateShort(e.date)}</strong>
               <span class="table-sub">${e.time || (e.startTime + ' – ' + e.endTime)}</span>
             </td>
-            <td>
+            <td data-label="Venue">
               <span>${e.venue || e.location}</span>
               <span class="table-sub">${e.city || 'Central District'}</span>
             </td>
-            <td>
+            <td data-label="Status">
               <select onchange="updateEventStatus('${e.id}', this.value)" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border);font-size:0.85rem;font-weight:600;">
                 <option value="upcoming" ${e.status === 'upcoming' ? 'selected' : ''}>Upcoming</option>
                 <option value="ongoing" ${e.status === 'ongoing' ? 'selected' : ''}>Ongoing</option>
@@ -467,22 +508,22 @@
                 <option value="cancelled" ${e.status === 'cancelled' ? 'selected' : ''}>Cancelled</option>
               </select>
             </td>
-            <td>
+            <td data-label="Photo Gallery">
               <button type="button" class="badge-btn" onclick="openGalleryModal(${e.id})" title="Manage Gallery Photos">
                 📷 Photos (${photoCount})
               </button>
             </td>
-            <td>
+            <td data-label="Feedback Form">
               <button type="button" class="badge-btn ${isFbActive ? 'active' : 'inactive'}" onclick="openFeedbackModal(${e.id})" title="Configure Feedback Form">
                 ⭐ ${isFbActive ? 'Active (' + respCount + ')' : 'Inactive'}
               </button>
             </td>
-            <td>
+            <td data-label="Live Tracking">
               <button type="button" class="badge-btn ${Boolean(e.liveTracking && e.liveTracking.enabled) ? 'active' : 'inactive'}" onclick="openHostTrackingModal(${e.id})" title="Manage Presiding Host Live GPS Tracking" style="${Boolean(e.liveTracking && e.liveTracking.enabled) ? 'background:#ffe4e6;color:#be123c;border-color:#f43f5e;' : ''}">
                 ${Boolean(e.liveTracking && e.liveTracking.enabled) ? '🔴 Live ON' : '⚪ Tracking Off'}
               </button>
             </td>
-            <td>
+            <td data-label="Actions">
               <div class="action-btn-group">
                 <a href="/events/${e.id}" class="table-action" target="_blank" title="View Public User Page">${icons.eye}</a>
                 <a href="/admin/registrations?eventId=${e.id}" class="table-action" title="View Registrations" style="color:var(--secondary);">${icons.users}</a>
@@ -494,6 +535,24 @@
           </tr>
         `;
       }).join('');
+
+      if (pagWrap) {
+        pagWrap.innerHTML = renderW3PaginationHTML({
+          currentPage: currentEventsPage,
+          totalPages: totalPages,
+          totalItems: totalItems,
+          itemsPerPage: eventsPerPage,
+          onPageChange: 'changeEventsPage',
+          itemLabel: 'events'
+        });
+      }
+    }
+
+    function changeEventsPage(page) {
+      currentEventsPage = page;
+      renderEventsTable(currentlyFilteredEvents);
+      const tableWrap = document.querySelector('.table-wrap');
+      if (tableWrap) tableWrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function filterEvents() {
@@ -508,6 +567,7 @@
         return matchesQuery && matchesCategory && matchesStatus;
       });
 
+      currentEventsPage = 1;
       renderEventsTable(filtered);
     }
 
@@ -537,10 +597,73 @@
     }
 
     // ─── GALLERY MODAL ───
+    let selectedGalleryImageData = '';
+
+    function handleGalleryDeviceFileSelect(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      processGalleryFile(file);
+    }
+
+    function processGalleryFile(file) {
+      if (!file.type.startsWith('image/')) {
+        alert('Please choose an image file (PNG, JPG, JPEG, WEBP).');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        selectedGalleryImageData = e.target.result;
+        document.getElementById('galleryPreviewImg').src = selectedGalleryImageData;
+        document.getElementById('galleryFileName').textContent = file.name;
+        document.getElementById('galleryFileSize').textContent = (file.size / 1024).toFixed(1) + ' KB';
+        document.getElementById('galleryDropPrompt').style.display = 'none';
+        document.getElementById('galleryDropPreview').style.display = 'flex';
+        // Clear URL input if file is picked
+        document.getElementById('newPhotoUrl').value = '';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function clearGalleryDeviceFile() {
+      selectedGalleryImageData = '';
+      const input = document.getElementById('galleryFileInput');
+      if (input) input.value = '';
+      const prompt = document.getElementById('galleryDropPrompt');
+      const preview = document.getElementById('galleryDropPreview');
+      if (prompt) prompt.style.display = 'block';
+      if (preview) preview.style.display = 'none';
+      const previewImg = document.getElementById('galleryPreviewImg');
+      if (previewImg) previewImg.src = '';
+    }
+
+    function toggleUrlInput() {
+      const wrap = document.getElementById('urlFieldWrap');
+      const btn = document.getElementById('toggleUrlBtn');
+      if (!wrap) return;
+      if (wrap.style.display === 'none' || !wrap.style.display) {
+        wrap.style.display = 'block';
+        btn.textContent = '– Hide external Image URL';
+      } else {
+        wrap.style.display = 'none';
+        btn.textContent = '+ Or provide an external Image URL';
+      }
+    }
+
+    function handleUrlInputChange() {
+      const val = document.getElementById('newPhotoUrl').value.trim();
+      if (val) {
+        clearGalleryDeviceFile();
+      }
+    }
+
     function openGalleryModal(eventId) {
       const ev = allEvents.find(e => String(e.id) === String(eventId));
       if (!ev) return;
       activeModalEventId = eventId;
+
+      clearGalleryDeviceFile();
+      document.getElementById('newPhotoUrl').value = '';
+      document.getElementById('newPhotoCaption').value = '';
 
       document.getElementById('galleryEventSub').textContent = `${ev.title} · ${formatDateShort(ev.date)}`;
       renderGalleryModalPhotos(ev);
@@ -550,6 +673,7 @@
     function closeGalleryModal() {
       document.getElementById('galleryModal').style.display = 'none';
       activeModalEventId = null;
+      clearGalleryDeviceFile();
     }
 
     function renderGalleryModalPhotos(ev) {
@@ -574,16 +698,23 @@
     function applyPhotoPreset(url, caption) {
       document.getElementById('newPhotoUrl').value = url;
       document.getElementById('newPhotoCaption').value = caption;
+      clearGalleryDeviceFile();
     }
 
     async function handleAddPhoto(e) {
       e.preventDefault();
-      const url = document.getElementById('newPhotoUrl').value;
-      const caption = document.getElementById('newPhotoCaption').value;
+      const urlInput = document.getElementById('newPhotoUrl').value.trim();
+      const caption = document.getElementById('newPhotoCaption').value.trim();
+      const imageSource = selectedGalleryImageData || urlInput;
+
+      if (!imageSource) {
+        alert('Please choose an image file from your device or provide an image URL.');
+        return;
+      }
 
       const res = await api(`/api/admin/events/${activeModalEventId}/gallery`, {
         method: 'POST',
-        body: JSON.stringify({ url, caption })
+        body: JSON.stringify({ url: imageSource, caption })
       });
 
       if (res.success) {
@@ -593,9 +724,12 @@
           renderGalleryModalPhotos(ev);
           renderEventsTable(allEvents);
         }
+        clearGalleryDeviceFile();
         document.getElementById('newPhotoUrl').value = '';
         document.getElementById('newPhotoCaption').value = '';
-        showToast('Photo added to event gallery!', icons.circleCheck);
+        showToast('Photo uploaded and added to event gallery!', icons.circleCheck);
+      } else {
+        alert(res.message || 'Failed to add photo');
       }
     }
 
@@ -925,6 +1059,32 @@
         showToast('Host route reset to start location.', icons.circleCheck);
       }
     }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const dropzone = document.getElementById('galleryPhotoDropzone');
+      if (dropzone) {
+        ['dragenter', 'dragover'].forEach(name => {
+          dropzone.addEventListener(name, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropzone.classList.add('dragover');
+          }, false);
+        });
+        ['dragleave', 'drop'].forEach(name => {
+          dropzone.addEventListener(name, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropzone.classList.remove('dragover');
+          }, false);
+        });
+        dropzone.addEventListener('drop', (e) => {
+          const dt = e.dataTransfer;
+          if (dt && dt.files && dt.files[0]) {
+            processGalleryFile(dt.files[0]);
+          }
+        }, false);
+      }
+    });
 
     loadEvents();
   </script>
