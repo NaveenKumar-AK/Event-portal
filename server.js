@@ -10,8 +10,9 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// ─── In-Memory Data Store ───
-const data = require('./data/store');
+// ─── Database Connection ───
+const connectDB = require('./config/db');
+connectDB();
 
 // ─── API Routes ───
 const eventRoutes = require('./routes/events');

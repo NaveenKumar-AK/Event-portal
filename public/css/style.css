@@ -433,6 +433,19 @@ ol, ul, menu { list-style: none; }
 .calendar-day--empty { background: #f9fafb; cursor: default; }
 .calendar-day.has-events { background: #faf7ff; }
 .calendar-day.is-selected { box-shadow: inset 0 0 0 3px var(--primary); z-index: 1; position: relative; }
+.calendar-day.is-today { background: #fdf8ff; }
+.calendar-day.is-today .calendar-day__number { border: 2px solid var(--primary); color: var(--primary); font-weight: 800; }
+.calendar-day.is-today.is-selected .calendar-day__number { background: var(--primary); color: #fff; }
+.calendar-today-badge {
+  display: inline-block;
+  background: #f3e8ff;
+  color: var(--primary);
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
 .calendar-day__number {
   border-radius: 50%; place-items: center;
   width: 30px; height: 30px; font-weight: 700; display: grid;

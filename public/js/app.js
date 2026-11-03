@@ -33,8 +33,9 @@
     registrationsPerPage: 5,
     albumsCurrentPage: 1,
     albumsPerPage: 6,
-    calendarDate: new Date(2026, 9, 1), // October 2026
-    selectedCalendarDate: '2026-10-15',
+    calendarDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+    selectedCalendarDate: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`,
+    calendarModalOpen: false,
     activeRegistrationsTab: 0,
     detailMapPopupOpen: false,
     detailMapError: false,
@@ -739,6 +740,12 @@
   }
 
   function renderCalendar() {
+    const today = new Date();
+    const todayYear = today.getFullYear();
+    const todayMonth = today.getMonth();
+    const todayDate = today.getDate();
+    const todayFormatted = `${todayYear}-${String(todayMonth + 1).padStart(2, '0')}-${String(todayDate).padStart(2, '0')}`;
+
     const year = state.calendarDate.getFullYear();
     const month = state.calendarDate.getMonth();
     const monthLabel = state.calendarDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -753,10 +760,6 @@
     ];
 
     const formatDayDate = (day) => `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-
-    const selectedEvents = state.selectedCalendarDate
-      ? state.events.filter(e => e.date === state.selectedCalendarDate)
-      : [];
 
     return `
       <section class="calendar-section" aria-labelledby="calendar-title">
@@ -797,6 +800,7 @@
               }
               const dStr = formatDayDate(day);
               const dayEvs = state.events.filter(e => e.date === dStr);
+              const isToday = dStr === todayFormatted;
               const isSel = state.selectedCalendarDate === dStr;
               const hasEvents = dayEvs.length > 0;
               const fullDateStr = new Date(year, month, day).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
@@ -804,12 +808,13 @@
               return `
                 <button
                   role="gridcell"
-                  class="calendar-day ${hasEvents ? 'has-events' : ''} ${isSel ? 'is-selected' : ''}"
+                  class="calendar-day ${hasEvents ? 'has-events' : ''} ${isToday ? 'is-today' : ''} ${isSel ? 'is-selected' : ''}"
                   data-date="${dStr}"
-                  aria-label="${fullDateStr}. ${hasEvents ? `${dayEvs.length} event${dayEvs.length > 1 ? 's' : ''} scheduled.` : 'No events scheduled.'}"
+                  aria-label="${fullDateStr}${isToday ? ' (Today)' : ''}. ${hasEvents ? `${dayEvs.length} event${dayEvs.length > 1 ? 's' : ''} scheduled.` : 'No events scheduled.'}"
                   aria-selected="${isSel}"
                 >
                   <span class="calendar-day__number">${day}</span>
+                  ${isToday ? `<span class="calendar-today-badge" style="font-size:0.68rem;color:var(--primary);font-weight:700;line-height:1;margin-top:2px;">Today</span>` : ''}
                   ${hasEvents ? `
                     <span class="calendar-event-indicator">
                       <i aria-hidden="true"></i>
@@ -821,35 +826,80 @@
             }).join('')}
           </div>
         </div>
+      </section>
+    `;
+  }
 
-        ${state.selectedCalendarDate ? `
-          <div class="selected-date-panel ${selectedEvents.length ? '' : 'selected-date-panel--empty'}" aria-live="polite">
+  // ─── Calendar Date Details Dialog / Modal ───
+  function renderCalendarModal() {
+    if (!state.calendarModalOpen || !state.selectedCalendarDate) return '';
+
+    const selectedEvents = state.events.filter(e => e.date === state.selectedCalendarDate);
+    const today = new Date();
+    const todayFormatted = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const isToday = state.selectedCalendarDate === todayFormatted;
+
+    return `
+      <div class="modal-backdrop" id="calendarModalBackdrop" role="presentation">
+        <section class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="calendarModalTitle" style="max-width:580px;">
+          <div class="panel-heading" style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;">
             <div>
-              <p class="eyebrow">Selected date</p>
-              <h3>${formatDate(state.selectedCalendarDate, { day: 'numeric', month: 'long' })}</h3>
-              ${selectedEvents.length > 0 ? `<span>${selectedEvents.length} ${selectedEvents.length === 1 ? 'event' : 'events'}</span>` : ''}
+              <p class="eyebrow" style="margin-bottom:4px;">${isToday ? 'Today · Scheduled Events' : 'Selected Date · Scheduled Events'}</p>
+              <h2 id="calendarModalTitle" style="font-size:1.35rem;display:flex;align-items:center;gap:8px;margin:0;color:var(--text);">
+                ${icons.calendarDays} ${formatDate(state.selectedCalendarDate, { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}
+              </h2>
             </div>
+            <button class="icon-button" id="closeCalendarModalBtn" aria-label="Close date details dialog">
+              ${icons.x}
+            </button>
+          </div>
+
+          <div>
             ${selectedEvents.length > 0 ? `
-              <div class="selected-events">
+              <div style="margin-bottom:14px;font-size:0.92rem;color:var(--text-2);">
+                <strong style="color:var(--text);">${selectedEvents.length}</strong> ${selectedEvents.length === 1 ? 'event scheduled' : 'events scheduled'} on this date.
+              </div>
+              <div class="selected-events" style="display:grid;gap:12px;">
                 ${selectedEvents.map(e => `
-                  <article>
-                    <div>
-                      <strong>${e.title}</strong>
-                      <span>${icons.clock} ${formatTimeRange(e)}</span>
-                      <span>${icons.mapPin} ${e.location}</span>
+                  <article style="border:1px solid #e9d5ff;border-left:4px solid var(--primary);border-radius:12px;padding:16px;background:#faf5ff;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;">
+                    <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:5px;">
+                      <strong style="font-size:1.05rem;color:var(--text);">${e.title}</strong>
+                      <span style="display:flex;align-items:center;gap:6px;font-size:0.88rem;color:var(--text-2);">
+                        ${icons.clock} ${formatTimeRange(e)}
+                      </span>
+                      <span style="display:flex;align-items:center;gap:6px;font-size:0.88rem;color:var(--text-2);">
+                        ${icons.mapPin} ${e.venue || e.location || 'Civic Hall'}
+                      </span>
+                      ${e.category ? `
+                        <div style="margin-top:2px;">
+                          <span style="background:#ede9fe;color:var(--primary);font-size:0.75rem;font-weight:700;padding:2px 8px;border-radius:999px;">${e.category}</span>
+                        </div>
+                      ` : ''}
                     </div>
-                    <button class="button button--secondary view-detail-btn" data-id="${e.id}">
-                      View details
+                    <button class="button button--secondary view-detail-btn" data-id="${e.id}" style="white-space:nowrap;">
+                      View details ${icons.arrowRight}
                     </button>
                   </article>
                 `).join('')}
               </div>
             ` : `
-              <p>No events scheduled for this date.</p>
+              <div style="text-align:center;padding:36px 16px;background:#f9fafb;border-radius:12px;border:1px dashed var(--border);">
+                <div style="width:48px;height:48px;border-radius:50%;background:#f3e8ff;color:var(--primary);display:grid;place-items:center;margin:0 auto 12px;">
+                  ${icons.calendar}
+                </div>
+                <h3 style="margin-bottom:6px;font-size:1.1rem;color:var(--text);">No events scheduled</h3>
+                <p style="color:var(--muted);font-size:0.9rem;margin:0;">There are no community events scheduled for this date.</p>
+              </div>
             `}
           </div>
-        ` : ''}
-      </section>
+
+          <div style="margin-top:22px;display:flex;justify-content:flex-end;">
+            <button class="button button--secondary" id="btnDoneCalendarModal">
+              Close
+            </button>
+          </div>
+        </section>
+      </div>
     `;
   }
 
@@ -1931,6 +1981,7 @@
       ${renderTicketModal()}
       ${renderLegalModal()}
       ${renderFeedbackModal()}
+      ${renderCalendarModal()}
     `;
 
     applyA11ySettings();
@@ -2274,7 +2325,6 @@
     if (calPrev) {
       calPrev.onclick = () => {
         state.calendarDate = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth() - 1, 1);
-        state.selectedCalendarDate = null;
         render();
       };
     }
@@ -2283,7 +2333,6 @@
     if (calNext) {
       calNext.onclick = () => {
         state.calendarDate = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth() + 1, 1);
-        state.selectedCalendarDate = null;
         render();
       };
     }
@@ -2291,9 +2340,10 @@
     const calToday = document.getElementById('calTodayBtn');
     if (calToday) {
       calToday.onclick = () => {
-        const today = new Date(2026, 9, 15);
+        const today = new Date();
         state.calendarDate = new Date(today.getFullYear(), today.getMonth(), 1);
         state.selectedCalendarDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        state.calendarModalOpen = true;
         render();
       };
     }
@@ -2302,9 +2352,37 @@
     document.querySelectorAll('.calendar-day[data-date]').forEach(btn => {
       btn.onclick = () => {
         state.selectedCalendarDate = btn.getAttribute('data-date');
+        state.calendarModalOpen = true;
         render();
       };
     });
+
+    // Calendar modal actions
+    const closeCalendarModalBtn = document.getElementById('closeCalendarModalBtn');
+    if (closeCalendarModalBtn) {
+      closeCalendarModalBtn.onclick = () => {
+        state.calendarModalOpen = false;
+        render();
+      };
+    }
+
+    const btnDoneCalendarModal = document.getElementById('btnDoneCalendarModal');
+    if (btnDoneCalendarModal) {
+      btnDoneCalendarModal.onclick = () => {
+        state.calendarModalOpen = false;
+        render();
+      };
+    }
+
+    const calendarModalBackdrop = document.getElementById('calendarModalBackdrop');
+    if (calendarModalBackdrop) {
+      calendarModalBackdrop.onmousedown = (e) => {
+        if (e.target === calendarModalBackdrop) {
+          state.calendarModalOpen = false;
+          render();
+        }
+      };
+    }
 
     // Locations modal triggers
     const openLocModalBtn = document.getElementById('openLocationModalBtn');
@@ -2861,6 +2939,7 @@
         const ev = state.events.find(item => item.id === id);
         if (ev) {
           state.locationModalOpen = false;
+          state.calendarModalOpen = false;
           navigate('event-detail', ev);
         }
       };
@@ -2870,7 +2949,10 @@
   // Keyboard accessibility
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      if (state.feedbackModalOpen) {
+      if (state.calendarModalOpen) {
+        state.calendarModalOpen = false;
+        render();
+      } else if (state.feedbackModalOpen) {
         state.feedbackModalOpen = false;
         render();
       } else if (state.ticketModalOpen) {
