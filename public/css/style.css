@@ -415,8 +415,16 @@ ol, ul, menu { list-style: none; }
 .calendar-toolbar > .button:first-child { justify-self: start; width: auto; }
 .calendar-toolbar > .button:last-child { justify-self: end; width: auto; }
 .calendar-grid {
-  border-top: 1px solid var(--border); border-left: 1px solid var(--border);
-  grid-template-columns: repeat(7, minmax(0, 1fr)); display: grid;
+  border-top: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+.calendar-row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  width: 100%;
 }
 .calendar-weekday {
   text-align: center; color: var(--text-2);
@@ -2250,6 +2258,73 @@ tbody tr:hover {
   100% { transform: scale(1.8); opacity: 0; }
 }
 
+/* ══════════════════════════════════════════════════════════════
+   ACCESSIBILITY & SCREEN READER ENHANCEMENTS (WCAG 2.1 AA / UIA)
+   Supports Windows Narrator, NVDA, JAWS, and Voice Readers
+   ══════════════════════════════════════════════════════════════ */
 
+/* Standard Screen Reader Only class (readable by Narrator/NVDA/JAWS, hidden visually) */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
 
+.sr-only-focusable:focus,
+.sr-only-focusable:focus-visible {
+  position: fixed !important;
+  top: 12px !important;
+  left: 12px !important;
+  z-index: 100000 !important;
+  width: auto !important;
+  height: auto !important;
+  padding: 12px 20px !important;
+  margin: 0 !important;
+  overflow: visible !important;
+  clip: auto !important;
+  white-space: normal !important;
+  background: var(--primary, #7c3aed) !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  font-size: 1rem !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+  outline: 3px solid #ffffff !important;
+  outline-offset: 2px !important;
+  text-decoration: none !important;
+}
 
+/* Enhanced Focus Visible for Windows Narrator & Keyboard Navigation */
+:focus-visible {
+  outline: 3px solid var(--focus, #7c3aed) !important;
+  outline-offset: 3px !important;
+}
+
+/* Windows High Contrast / Forced Colors Mode support */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 3px solid Highlight !important;
+    outline-offset: 3px !important;
+  }
+  .button--primary,
+  .button--secondary,
+  .a11y-button,
+  .profile-button,
+  .menu-button,
+  .icon-button {
+    forced-color-adjust: none;
+    border: 2px solid ButtonText !important;
+  }
+  .status,
+  .badge,
+  .calendar-day.is-today,
+  .calendar-day.is-selected {
+    border: 2px solid Highlight !important;
+  }
+}

@@ -36,6 +36,7 @@
     calendarDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     selectedCalendarDate: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`,
     calendarModalOpen: false,
+    _modalTriggerElement: null,
     activeRegistrationsTab: 0,
     detailMapPopupOpen: false,
     detailMapError: false,
@@ -154,7 +155,16 @@
     state.helpModalOpen = false;
     state.profileModalOpen = false;
     state.ticketModalOpen = false;
+    state.calendarModalOpen = false;
+    state.feedbackModalOpen = false;
+    state.locationModalOpen = false;
     state.legalModal = null;
+    state.a11yOpen = false;
+
+    // Clear any aria-hidden attributes on main layout
+    document.querySelectorAll('.site-header, #main-content, .footer').forEach(el => {
+      el.removeAttribute('aria-hidden');
+    });
 
     if (state.galleryAutoTimer) {
       clearInterval(state.galleryAutoTimer);
@@ -166,6 +176,16 @@
       window._hostTrackingInterval = null;
     }
 
+    let pageTitle = 'Discover Events';
+    if (page === 'events') pageTitle = 'Discover Accessible Events';
+    else if (page === 'event-detail') pageTitle = state.selectedEvent ? state.selectedEvent.title : 'Event Details';
+    else if (page === 'event-register') pageTitle = `Register for ${state.selectedEvent ? state.selectedEvent.title : 'Event'}`;
+    else if (page === 'gallery') pageTitle = 'Event Photo Gallery';
+    else if (page === 'confirmation') pageTitle = 'Registration Confirmed';
+    else if (page === 'registrations') pageTitle = 'My Registrations';
+
+    document.title = `ServeDeServe — ${pageTitle}`;
+
     if (page === 'registrations') {
       state.page = 'events';
       if (updateHistory) {
@@ -174,7 +194,14 @@
       render();
       setTimeout(() => {
         const el = document.getElementById('myRegistrationsSection');
-        if (el) el.scrollIntoView({ behavior: state.reduceMotion ? 'auto' : 'smooth', block: 'start' });
+        if (el) {
+          el.setAttribute('tabindex', '-1');
+          el.focus();
+          el.scrollIntoView({ behavior: state.reduceMotion ? 'auto' : 'smooth', block: 'start' });
+        }
+        if (typeof announceToScreenReader === 'function') {
+          announceToScreenReader('Navigated to My Registrations section.');
+        }
       }, 100);
       return;
     }
@@ -195,6 +222,24 @@
       top: 0,
       behavior: state.reduceMotion ? 'auto' : 'smooth'
     });
+
+    // Screen reader focus management: shift focus to main heading so Windows Narrator / NVDA starts reading
+    setTimeout(() => {
+      const heading = document.querySelector('#main-content h1, #main-content [role="heading"][aria-level="1"], main h1');
+      if (heading) {
+        heading.setAttribute('tabindex', '-1');
+        heading.focus();
+      } else {
+        const mc = document.getElementById('main-content');
+        if (mc) {
+          mc.setAttribute('tabindex', '-1');
+          mc.focus();
+        }
+      }
+      if (typeof announceToScreenReader === 'function') {
+        announceToScreenReader(`Navigated to ${pageTitle}. ${heading ? heading.textContent : ''}`, 'polite');
+      }
+    }, 100);
   }
 
   // Handle URL on load or back/forward
@@ -286,10 +331,9 @@
   function renderHeader() {
     const isPortalActive = state.page === 'events' || state.page === 'event-detail' || state.page === 'event-register';
     const isGalleryActive = state.page === 'gallery';
-    const isRegActive = state.page === 'registrations';
 
     return `
-      <header class="site-header">
+      <header class="site-header" role="banner">
         <div class="nav-shell">
           <button class="brand" id="brandBtn" aria-label="ServeDeServe Event Portal home">
             <span class="brand__mark" aria-hidden="true">
@@ -300,19 +344,19 @@
               <small>Services that serve everyone</small>
             </span>
           </button>
-          <button class="menu-button" id="menuToggleBtn" aria-expanded="${state.mobileMenuOpen}" aria-label="Open navigation menu">
+          <button class="menu-button" id="menuToggleBtn" aria-expanded="${state.mobileMenuOpen}" aria-label="${state.mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}">
             ${state.mobileMenuOpen ? icons.x : icons.menu}
             <span>Menu</span>
           </button>
-          <nav class="main-nav ${state.mobileMenuOpen ? 'is-open' : ''}" aria-label="Main navigation">
-            <button class="${isPortalActive ? 'active' : ''}" id="navPortal">Event portal</button>
-            <button class="${isGalleryActive ? 'active' : ''}" id="navGallery" style="display:inline-flex;align-items:center;gap:6px;">
+          <nav class="main-nav ${state.mobileMenuOpen ? 'is-open' : ''}" role="navigation" aria-label="Main navigation">
+            <button class="${isPortalActive ? 'active' : ''}" id="navPortal" ${isPortalActive ? 'aria-current="page"' : ''} aria-label="Go to Event portal">Event portal</button>
+            <button class="${isGalleryActive ? 'active' : ''}" id="navGallery" ${isGalleryActive ? 'aria-current="page"' : ''} aria-label="Go to Event photo gallery" style="display:inline-flex;align-items:center;gap:6px;">
               ${icons.image} Gallery
             </button>
-            <button class="a11y-button" id="navA11y" onclick="toggleA11yPanel()">
+            <button class="a11y-button" id="navA11y" onclick="toggleA11yPanel()" aria-label="Open Accessibility Display settings">
               ${icons.accessibility} Accessibility
             </button>
-            <button class="profile-button" id="navProfile">
+            <button class="profile-button" id="navProfile" aria-label="Open User Profile and account settings">
               ${icons.userRound} Profile
             </button>
           </nav>
@@ -369,7 +413,7 @@
 
     return `
       <button class="scrim" id="a11yScrim" onclick="toggleA11yPanel(false)" aria-label="Close accessibility settings"></button>
-      <aside class="a11y-panel" id="a11yPanel" aria-label="Accessibility settings" role="dialog" aria-modal="true">
+      <aside class="a11y-panel" id="a11yPanel" aria-label="Accessibility settings" role="dialog" aria-modal="true" tabindex="-1">
         <div class="panel-heading">
           <div>
             <p class="eyebrow">YOUR PREFERENCES</p>
@@ -409,9 +453,9 @@
             ${state.reduceMotion ? 'On' : 'Off'}
           </button>
         </div>
-        <button class="button button--secondary" id="resetA11yBtn" style="width:100%;margin-top:24px;">Reset all settings</button>
+        <button class="button button--secondary" id="resetA11yBtn" style="width:100%;margin-top:20px;">Reset all settings</button>
         <p class="panel-note">
-          ${icons.shieldCheck} Preferences are saved on this device.
+          ${icons.shieldCheck} Preferences are saved on this device. Fully compatible with Windows Narrator, NVDA, and JAWS.
         </p>
       </aside>
     `;
@@ -442,7 +486,7 @@
 
     return `
       <div class="modal-backdrop" id="helpModalBackdrop" role="presentation">
-        <section class="modal-dialog modal-dialog--lg" role="dialog" aria-modal="true" aria-labelledby="helpModalTitle">
+        <section class="modal-dialog modal-dialog--lg" role="dialog" aria-modal="true" aria-labelledby="helpModalTitle" tabindex="-1">
           <div class="panel-heading">
             <div>
               <p class="eyebrow">Support Centre</p>
@@ -518,7 +562,7 @@
 
     return `
       <div class="modal-backdrop" id="profileModalBackdrop" role="presentation">
-        <section class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="profileModalTitle">
+        <section class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="profileModalTitle" tabindex="-1">
           <div class="panel-heading">
             <div>
               <p class="eyebrow">Account</p>
@@ -590,7 +634,7 @@
 
     return `
       <div class="modal-backdrop" id="ticketModalBackdrop" role="presentation">
-        <section class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="ticketTitle">
+        <section class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="ticketTitle" tabindex="-1">
           <div class="panel-heading">
             <div>
               <p class="eyebrow">Official Event Pass</p>
@@ -695,7 +739,7 @@
 
     return `
       <div class="modal-backdrop" id="legalModalBackdrop" role="presentation">
-        <section class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="legalTitle">
+        <section class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="legalTitle" tabindex="-1">
           <div class="panel-heading">
             <div>
               <p class="eyebrow">${eyebrow}</p>
@@ -726,13 +770,13 @@
           </div>
           <h3 style="margin-bottom:10px;font-size:1.15rem;line-height:1.4;">${event.title}</h3>
           <div class="event-meta">
-            <span>${icons.calendar} ${formatDate(event.date)}</span>
-            <span>${icons.clock} ${formatTimeRange(event)}</span>
-            <span>${icons.mapPin} ${event.location}</span>
+            <span>${icons.calendar} <span class="sr-only">Date: </span>${formatDate(event.date)}</span>
+            <span>${icons.clock} <span class="sr-only">Time: </span>${formatTimeRange(event)}</span>
+            <span>${icons.mapPin} <span class="sr-only">Location: </span>${event.location}</span>
           </div>
           <p style="margin-bottom:20px;color:var(--muted);font-size:0.92rem;line-height:1.5;">${event.description}</p>
-          <button class="button button--secondary view-detail-btn" data-id="${event.id}">
-            View details ${icons.arrowRight}
+          <button class="button button--secondary view-detail-btn" data-id="${event.id}" aria-label="View event details for ${event.title}">
+            View details <span aria-hidden="true">${icons.arrowRight}</span>
           </button>
         </div>
       </article>
@@ -759,6 +803,15 @@
       ...Array.from({ length: daysInMonth }, (_, i) => i + 1)
     ];
 
+    while (cells.length % 7 !== 0) {
+      cells.push(null);
+    }
+
+    const weeks = [];
+    for (let i = 0; i < cells.length; i += 7) {
+      weeks.push(cells.slice(i, i + 7));
+    }
+
     const formatDayDate = (day) => `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
     return `
@@ -771,59 +824,67 @@
             </h2>
             <p>Browse events by date or explore where they are taking place.</p>
           </div>
-          <button class="button button--secondary" id="openLocationModalBtn">
+          <button class="button button--secondary" id="openLocationModalBtn" aria-label="Open event locations and venue map">
             ${icons.mapPin} Locations
           </button>
         </div>
         <div class="calendar-card">
           <div class="calendar-toolbar">
-            <button class="button button--secondary" id="calPrevMonthBtn">
+            <button class="button button--secondary" id="calPrevMonthBtn" aria-label="Previous month">
               ${icons.chevronLeft}
               <span class="calendar-button-label">Previous month</span>
             </button>
             <div>
-              <h3 aria-live="polite">${monthLabel}</h3>
-              <button id="calTodayBtn">Today</button>
+              <h3 aria-live="polite" id="calMonthDisplay">${monthLabel}</h3>
+              <button id="calTodayBtn" aria-label="Jump calendar to today's date">Today</button>
             </div>
-            <button class="button button--secondary" id="calNextMonthBtn">
+            <button class="button button--secondary" id="calNextMonthBtn" aria-label="Next month">
               <span class="calendar-button-label">Next month</span>
               ${icons.chevronRight}
             </button>
           </div>
           <div class="calendar-grid" role="grid" aria-label="${monthLabel} event calendar">
-            ${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(w => `
-              <div class="calendar-weekday" role="columnheader">${w}</div>
-            `).join('')}
-            ${cells.map((day, idx) => {
-              if (!day) {
-                return `<div class="calendar-day calendar-day--empty" aria-hidden="true"></div>`;
-              }
-              const dStr = formatDayDate(day);
-              const dayEvs = state.events.filter(e => e.date === dStr);
-              const isToday = dStr === todayFormatted;
-              const isSel = state.selectedCalendarDate === dStr;
-              const hasEvents = dayEvs.length > 0;
-              const fullDateStr = new Date(year, month, day).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+            <div class="calendar-row" role="row">
+              ${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(w => `
+                <div class="calendar-weekday" role="columnheader">${w}</div>
+              `).join('')}
+            </div>
+            ${weeks.map(week => `
+              <div class="calendar-row" role="row">
+                ${week.map(day => {
+                  if (!day) {
+                    return `<div class="calendar-day calendar-day--empty" role="gridcell" aria-hidden="true"></div>`;
+                  }
+                  const dStr = formatDayDate(day);
+                  const dayEvs = state.events.filter(e => e.date === dStr);
+                  const isToday = dStr === todayFormatted;
+                  const isSel = state.selectedCalendarDate === dStr;
+                  const hasEvents = dayEvs.length > 0;
+                  const fullDateStr = new Date(year, month, day).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+                  const eventSummary = hasEvents ? `${dayEvs.length} event${dayEvs.length > 1 ? 's' : ''} scheduled: ${dayEvs.map(e => e.title).join(', ')}` : 'No events scheduled';
+                  const accessibleLabel = `${fullDateStr}${isToday ? ' (Today)' : ''}. ${eventSummary}`;
 
-              return `
-                <button
-                  role="gridcell"
-                  class="calendar-day ${hasEvents ? 'has-events' : ''} ${isToday ? 'is-today' : ''} ${isSel ? 'is-selected' : ''}"
-                  data-date="${dStr}"
-                  aria-label="${fullDateStr}${isToday ? ' (Today)' : ''}. ${hasEvents ? `${dayEvs.length} event${dayEvs.length > 1 ? 's' : ''} scheduled.` : 'No events scheduled.'}"
-                  aria-selected="${isSel}"
-                >
-                  <span class="calendar-day__number">${day}</span>
-                  ${isToday ? `<span class="calendar-today-badge" style="font-size:0.68rem;color:var(--primary);font-weight:700;line-height:1;margin-top:2px;">Today</span>` : ''}
-                  ${hasEvents ? `
-                    <span class="calendar-event-indicator">
-                      <i aria-hidden="true"></i>
-                      ${dayEvs.length} ${dayEvs.length === 1 ? 'Event' : 'Events'}
-                    </span>
-                  ` : ''}
-                </button>
-              `;
-            }).join('')}
+                  return `
+                    <button
+                      role="gridcell"
+                      class="calendar-day ${hasEvents ? 'has-events' : ''} ${isToday ? 'is-today' : ''} ${isSel ? 'is-selected' : ''}"
+                      data-date="${dStr}"
+                      aria-label="${accessibleLabel}"
+                      aria-selected="${isSel}"
+                    >
+                      <span class="calendar-day__number" aria-hidden="true">${day}</span>
+                      ${isToday ? `<span class="calendar-today-badge" aria-hidden="true">Today</span>` : ''}
+                      ${hasEvents ? `
+                        <span class="calendar-event-indicator" aria-hidden="true">
+                          <i></i>
+                          ${dayEvs.length} ${dayEvs.length === 1 ? 'Event' : 'Events'}
+                        </span>
+                      ` : ''}
+                    </button>
+                  `;
+                }).join('')}
+              </div>
+            `).join('')}
           </div>
         </div>
       </section>
@@ -841,7 +902,7 @@
 
     return `
       <div class="modal-backdrop" id="calendarModalBackdrop" role="presentation">
-        <section class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="calendarModalTitle" style="max-width:580px;">
+        <section class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="calendarModalTitle" tabindex="-1" style="max-width:580px;">
           <div class="panel-heading" style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;">
             <div>
               <p class="eyebrow" style="margin-bottom:4px;">${isToday ? 'Today · Scheduled Events' : 'Selected Date · Scheduled Events'}</p>
@@ -865,10 +926,10 @@
                     <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:5px;">
                       <strong style="font-size:1.05rem;color:var(--text);">${e.title}</strong>
                       <span style="display:flex;align-items:center;gap:6px;font-size:0.88rem;color:var(--text-2);">
-                        ${icons.clock} ${formatTimeRange(e)}
+                        ${icons.clock} <span class="sr-only">Time: </span>${formatTimeRange(e)}
                       </span>
                       <span style="display:flex;align-items:center;gap:6px;font-size:0.88rem;color:var(--text-2);">
-                        ${icons.mapPin} ${e.venue || e.location || 'Civic Hall'}
+                        ${icons.mapPin} <span class="sr-only">Venue: </span>${e.venue || e.location || 'Civic Hall'}
                       </span>
                       ${e.category ? `
                         <div style="margin-top:2px;">
@@ -876,15 +937,15 @@
                         </div>
                       ` : ''}
                     </div>
-                    <button class="button button--secondary view-detail-btn" data-id="${e.id}" style="white-space:nowrap;">
-                      View details ${icons.arrowRight}
+                    <button class="button button--secondary view-detail-btn" data-id="${e.id}" aria-label="View event details for ${e.title}" style="white-space:nowrap;">
+                      View details <span aria-hidden="true">${icons.arrowRight}</span>
                     </button>
                   </article>
                 `).join('')}
               </div>
             ` : `
               <div style="text-align:center;padding:36px 16px;background:#f9fafb;border-radius:12px;border:1px dashed var(--border);">
-                <div style="width:48px;height:48px;border-radius:50%;background:#f3e8ff;color:var(--primary);display:grid;place-items:center;margin:0 auto 12px;">
+                <div style="width:48px;height:48px;border-radius:50%;background:#f3e8ff;color:var(--primary);display:grid;place-items:center;margin:0 auto 12px;" aria-hidden="true">
                   ${icons.calendar}
                 </div>
                 <h3 style="margin-bottom:6px;font-size:1.1rem;color:var(--text);">No events scheduled</h3>
@@ -894,7 +955,7 @@
           </div>
 
           <div style="margin-top:22px;display:flex;justify-content:flex-end;">
-            <button class="button button--secondary" id="btnDoneCalendarModal">
+            <button class="button button--secondary" id="btnDoneCalendarModal" aria-label="Close dialog">
               Close
             </button>
           </div>
@@ -910,7 +971,7 @@
 
     return `
       <div class="location-modal-backdrop" id="locationModalBackdrop" role="presentation">
-        <section class="location-modal" role="dialog" aria-modal="true" aria-labelledby="location-title">
+        <section class="location-modal" role="dialog" aria-modal="true" aria-labelledby="location-title" tabindex="-1">
           <div class="panel-heading">
             <div>
               <p class="eyebrow">Event map</p>
@@ -971,15 +1032,10 @@
     `;
   }
 
-  // View: Discover Events
-  function renderEventsView() {
-    const locData = typeof INDIAN_LOCATIONS !== 'undefined' ? INDIAN_LOCATIONS : {};
-    const allIndianStates = Object.keys(locData).sort();
-    const availableDistricts = (state.selectedState && locData[state.selectedState]) ? locData[state.selectedState] : [];
-
-    let filtered = state.events.filter(e => {
-      const q = state.searchQuery.toLowerCase();
-      const matchesSearch = !q || e.title.toLowerCase().includes(q) || e.description.toLowerCase().includes(q);
+  function getFilteredEvents() {
+    return state.events.filter(e => {
+      const q = (state.searchQuery || '').toLowerCase();
+      const matchesSearch = !q || (e.title && e.title.toLowerCase().includes(q)) || (e.description && e.description.toLowerCase().includes(q));
       const matchesCat = state.categoryFilter === 'All categories' || e.category === state.categoryFilter;
 
       let matchesState = true;
@@ -1001,14 +1057,22 @@
 
       let matchesDate = true;
       if (state.dateFilter === 'This week') {
-        // Oct 12 - Oct 18
         matchesDate = e.date >= '2026-10-12' && e.date <= '2026-10-18';
       } else if (state.dateFilter === 'This month') {
-        matchesDate = e.date.startsWith('2026-10');
+        matchesDate = e.date && e.date.startsWith('2026-10');
       }
 
       return matchesSearch && matchesCat && matchesState && matchesDistrict && matchesDate;
     });
+  }
+
+  // View: Discover Events
+  function renderEventsView() {
+    const locData = typeof INDIAN_LOCATIONS !== 'undefined' ? INDIAN_LOCATIONS : {};
+    const allIndianStates = Object.keys(locData).sort();
+    const availableDistricts = (state.selectedState && locData[state.selectedState]) ? locData[state.selectedState] : [];
+
+    const filtered = getFilteredEvents();
 
     const totalEvents = filtered.length;
     const perPage = state.eventsPerPage || 6;
@@ -1021,9 +1085,9 @@
     const paginatedEvents = filtered.slice(startIdx, endIdx);
 
     return `
-      <main class="page-shell">
+      <div class="page-shell">
         <nav class="breadcrumbs" aria-label="Breadcrumb">
-          <button id="bcHome">Home</button>
+          <button id="bcHome" aria-label="Go to Home page">Home</button>
           <span aria-hidden="true">/</span>
           <span aria-current="page">Event portal</span>
         </nav>
@@ -1038,13 +1102,13 @@
             <label for="event-search">Search events</label>
             <span>
               ${icons.search}
-              <input id="event-search" value="${state.searchQuery}" placeholder="Search by event name or keyword">
+              <input id="event-search" type="search" value="${state.searchQuery}" placeholder="Search by event name or keyword" aria-label="Search events by event name or keyword" autocomplete="off">
             </span>
           </div>
           <div class="field">
             <label for="category-select">Category</label>
             <div class="select-wrap">
-              <select id="category-select">
+              <select id="category-select" aria-label="Filter events by category">
                 <option ${state.categoryFilter === 'All categories' ? 'selected' : ''}>All categories</option>
                 <option ${state.categoryFilter === 'Workshop' ? 'selected' : ''}>Workshop</option>
                 <option ${state.categoryFilter === 'Community' ? 'selected' : ''}>Community</option>
@@ -1056,7 +1120,7 @@
           <div class="field">
             <label for="date-select">Date</label>
             <div class="select-wrap">
-              <select id="date-select">
+              <select id="date-select" aria-label="Filter events by date">
                 <option ${state.dateFilter === 'Any date' ? 'selected' : ''}>Any date</option>
                 <option ${state.dateFilter === 'This week' ? 'selected' : ''}>This week</option>
                 <option ${state.dateFilter === 'This month' ? 'selected' : ''}>This month</option>
@@ -1067,7 +1131,7 @@
           <div class="field">
             <label for="state-select">State</label>
             <div class="select-wrap">
-              <select id="state-select">
+              <select id="state-select" aria-label="Filter events by Indian state">
                 <option value="All States" ${state.selectedState === 'All States' ? 'selected' : ''}>All States</option>
                 ${allIndianStates.map(st => `
                   <option value="${st}" ${state.selectedState === st ? 'selected' : ''}>${st}</option>
@@ -1079,7 +1143,7 @@
           <div class="field">
             <label for="district-select">District</label>
             <div class="select-wrap">
-              <select id="district-select" ${state.selectedState === 'All States' ? 'disabled' : ''}>
+              <select id="district-select" ${state.selectedState === 'All States' ? 'disabled' : ''} aria-label="Filter events by district in selected state">
                 <option value="All Districts">${state.selectedState === 'All States' ? 'Select State first' : `All Districts in ${state.selectedState}`}</option>
                 ${availableDistricts.map(dt => `
                   <option value="${dt}" ${state.selectedDistrict === dt ? 'selected' : ''}>${dt}</option>
@@ -1090,7 +1154,7 @@
           </div>
         </section>
 
-        <div class="results-heading">
+        <div class="results-heading" aria-live="polite" aria-atomic="true">
           <h2>Upcoming events</h2>
           <span>${totalEvents === 0 ? '0 events found' : `Showing ${startIdx + 1}&ndash;${endIdx} of ${totalEvents} events`}</span>
         </div>
@@ -1120,7 +1184,7 @@
 
         ${renderCalendar()}
         ${renderLocationModal()}
-      </main>
+      </div>
     `;
   }
 
@@ -1147,7 +1211,7 @@
       : `https://maps.google.com/?q=${encodeURIComponent(`${locName}, ${addrName}`)}`;
 
     return `
-      <main class="page-shell">
+      <div class="page-shell">
         <nav class="breadcrumbs" aria-label="Breadcrumb">
           <button id="bcHome">Home</button>
           <span aria-hidden="true">/</span>
@@ -1318,7 +1382,7 @@
             `}
           </aside>
         </article>
-      </main>
+      </div>
     `;
   }
 
@@ -1327,7 +1391,7 @@
     const e = state.selectedEvent;
 
     return `
-      <main class="narrow-shell">
+      <div class="narrow-shell">
         <nav class="breadcrumbs" aria-label="Breadcrumb">
           <button id="bcHome">Home</button>
           <span aria-hidden="true">/</span>
@@ -1378,14 +1442,14 @@
             </button>
           </div>
         </form>
-      </main>
+      </div>
     `;
   }
 
   // View: Confirmation
   function renderConfirmationView() {
     return `
-      <main class="confirmation">
+      <div class="confirmation">
         <div class="confirmation__icon">
           ${icons.check}
         </div>
@@ -1400,7 +1464,7 @@
             Return to events
           </button>
         </div>
-      </main>
+      </div>
     `;
   }
 
@@ -1646,7 +1710,7 @@
     const paginatedAlbums = eventsWithPhotos.slice(startAlbumIdx, endAlbumIdx);
 
     return `
-      <main class="page-shell">
+      <div class="page-shell">
         <nav class="breadcrumbs" aria-label="Breadcrumb">
           <button id="bcHome">Home</button>
           <span aria-hidden="true">/</span>
@@ -1808,7 +1872,7 @@
             itemLabel: 'albums'
           }) : ''}
         </div>
-      </main>
+      </div>
     `;
   }
 
@@ -1835,7 +1899,7 @@
 
     return `
       <div class="modal-backdrop" id="feedbackModalBackdrop">
-        <div class="feedback-modal-card" role="dialog" aria-modal="true" aria-labelledby="feedbackTitle">
+        <div class="feedback-modal-card" role="dialog" aria-modal="true" aria-labelledby="feedbackTitle" tabindex="-1">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
             <div>
               <span class="feedback-banner__badge">${icons.star} Attendee Feedback</span>
@@ -1969,12 +2033,14 @@
     }
 
     root.innerHTML = `
-      <a class="skip-link" href="#main-content">Skip to main content</a>
+      <a class="skip-link sr-only-focusable" href="#main-content">Skip to main content</a>
       ${renderHeader()}
-      <div id="main-content">
+      <main id="main-content" role="main" tabindex="-1">
         ${mainContentHtml}
-      </div>
+      </main>
       ${renderFooter()}
+      <div id="sr-announcer" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+      <div id="sr-assertive" class="sr-only" role="alert" aria-live="assertive" aria-atomic="true"></div>
       ${renderA11yDrawer()}
       ${renderHelpModal()}
       ${renderProfileModal()}
@@ -2142,6 +2208,76 @@
     }
   }
 
+  // ─── Accessible Modal & Dialog Management (Windows Narrator / NVDA / JAWS) ───
+  function openModal(modalType, title) {
+    state._modalTriggerElement = document.activeElement;
+    if (modalType === 'calendar') state.calendarModalOpen = true;
+    else if (modalType === 'help') state.helpModalOpen = true;
+    else if (modalType === 'profile') state.profileModalOpen = true;
+    else if (modalType === 'ticket') state.ticketModalOpen = true;
+    else if (modalType === 'feedback') state.feedbackModalOpen = true;
+    else if (modalType === 'location') state.locationModalOpen = true;
+    else if (modalType === 'a11y') state.a11yOpen = true;
+    else if (modalType && modalType.startsWith('legal:')) state.legalModal = modalType.split(':')[1];
+
+    state.mobileMenuOpen = false;
+    render();
+
+    // Shield background landmarks from assistive screen readers while dialog is active
+    const mainEl = document.getElementById('main-content');
+    if (mainEl) mainEl.setAttribute('aria-hidden', 'true');
+    const headerEl = document.querySelector('header[role="banner"]');
+    if (headerEl) headerEl.setAttribute('aria-hidden', 'true');
+    const footerEl = document.querySelector('footer[role="contentinfo"]');
+    if (footerEl) footerEl.setAttribute('aria-hidden', 'true');
+
+    setTimeout(() => {
+      const dialog = document.querySelector('.modal-backdrop [role="dialog"], .location-modal, .a11y-panel[role="dialog"]');
+      if (dialog) {
+        if (!dialog.hasAttribute('tabindex')) dialog.setAttribute('tabindex', '-1');
+        const focusable = dialog.querySelector('button, [href], input, select, textarea');
+        if (focusable) focusable.focus();
+        else dialog.focus();
+      }
+      if (typeof announceToScreenReader === 'function') {
+        announceToScreenReader(`${title || 'Dialog'} opened. Press Escape to close.`, 'polite');
+      }
+    }, 40);
+  }
+
+  function closeModal() {
+    let closedTitle = 'Dialog';
+    if (state.calendarModalOpen) { state.calendarModalOpen = false; closedTitle = 'Calendar date details'; }
+    if (state.helpModalOpen) { state.helpModalOpen = false; closedTitle = 'Help & Support dialog'; }
+    if (state.profileModalOpen) { state.profileModalOpen = false; closedTitle = 'User Profile dialog'; }
+    if (state.ticketModalOpen) { state.ticketModalOpen = false; closedTitle = 'Registration Pass dialog'; }
+    if (state.feedbackModalOpen) { state.feedbackModalOpen = false; closedTitle = 'Feedback dialog'; }
+    if (state.locationModalOpen) { state.locationModalOpen = false; closedTitle = 'Event locations dialog'; }
+    if (state.legalModal) { state.legalModal = null; closedTitle = 'Policy statement dialog'; }
+    if (state.a11yOpen) { state.a11yOpen = false; closedTitle = 'Accessibility settings panel'; }
+
+    // Restore background accessibility landmarks
+    const mainEl = document.getElementById('main-content');
+    if (mainEl) mainEl.removeAttribute('aria-hidden');
+    const headerEl = document.querySelector('header[role="banner"]');
+    if (headerEl) headerEl.removeAttribute('aria-hidden');
+    const footerEl = document.querySelector('footer[role="contentinfo"]');
+    if (footerEl) footerEl.removeAttribute('aria-hidden');
+
+    render();
+
+    if (typeof announceToScreenReader === 'function') {
+      announceToScreenReader(`${closedTitle} closed.`, 'polite');
+    }
+
+    if (state._modalTriggerElement && typeof state._modalTriggerElement.focus === 'function') {
+      try {
+        state._modalTriggerElement.focus();
+      } catch (err) {}
+      state._modalTriggerElement = null;
+    }
+  }
+
   // ─── Event Binding ───
   function bindEvents() {
     // Brand buttons
@@ -2161,20 +2297,20 @@
     if (footerRegBtn) footerRegBtn.onclick = () => navigate('registrations');
 
     const footerHelpBtn = document.getElementById('footerHelpBtn');
-    if (footerHelpBtn) footerHelpBtn.onclick = () => { state.helpModalOpen = true; render(); };
+    if (footerHelpBtn) footerHelpBtn.onclick = () => openModal('help', 'Help & Support');
 
     const footerA11yBtn = document.getElementById('footerA11yBtn');
-    if (footerA11yBtn) footerA11yBtn.onclick = () => { state.a11yOpen = true; render(); };
+    if (footerA11yBtn) footerA11yBtn.onclick = () => openModal('a11y', 'Accessibility settings');
 
     // Footer Legal Modals
     const btnFooterPrivacy = document.getElementById('btnFooterPrivacy');
-    if (btnFooterPrivacy) btnFooterPrivacy.onclick = () => { state.legalModal = 'privacy'; render(); };
+    if (btnFooterPrivacy) btnFooterPrivacy.onclick = () => openModal('legal:privacy', 'Privacy Policy');
 
     const btnFooterTerms = document.getElementById('btnFooterTerms');
-    if (btnFooterTerms) btnFooterTerms.onclick = () => { state.legalModal = 'terms'; render(); };
+    if (btnFooterTerms) btnFooterTerms.onclick = () => openModal('legal:terms', 'Terms of Service');
 
     const btnFooterA11yStmt = document.getElementById('btnFooterA11yStmt');
-    if (btnFooterA11yStmt) btnFooterA11yStmt.onclick = () => { state.legalModal = 'a11y-stmt'; render(); };
+    if (btnFooterA11yStmt) btnFooterA11yStmt.onclick = () => openModal('legal:a11y-stmt', 'Accessibility Statement');
 
     // Header nav buttons
     const navHome = document.getElementById('navHome');
@@ -2190,13 +2326,13 @@
     if (navReg) navReg.onclick = () => navigate('registrations');
 
     const navHelp = document.getElementById('navHelp');
-    if (navHelp) navHelp.onclick = () => { state.helpModalOpen = true; render(); };
+    if (navHelp) navHelp.onclick = () => openModal('help', 'Help & Support');
 
     const navA11y = document.getElementById('navA11y');
-    if (navA11y) navA11y.onclick = (e) => { e.preventDefault(); toggleA11y(true); };
+    if (navA11y) navA11y.onclick = (e) => { e.preventDefault(); openModal('a11y', 'Accessibility settings'); };
 
     const navProfile = document.getElementById('navProfile');
-    if (navProfile) navProfile.onclick = () => { state.profileModalOpen = true; render(); };
+    if (navProfile) navProfile.onclick = () => openModal('profile', 'User Profile');
 
     const menuToggleBtn = document.getElementById('menuToggleBtn');
     if (menuToggleBtn) menuToggleBtn.onclick = () => { state.mobileMenuOpen = !state.mobileMenuOpen; render(); };
@@ -2208,7 +2344,8 @@
     const btnMyRegTop = document.getElementById('btnMyRegTop');
     if (btnMyRegTop) btnMyRegTop.onclick = () => navigate('registrations');
 
-    // Filter controls
+    // Filter controls with screen reader announcements
+    let searchDebounce = null;
     const searchInput = document.getElementById('event-search');
     if (searchInput) {
       searchInput.oninput = (e) => {
@@ -2220,6 +2357,11 @@
           input.focus();
           input.setSelectionRange(input.value.length, input.value.length);
         }
+        clearTimeout(searchDebounce);
+        searchDebounce = setTimeout(() => {
+          const count = getFilteredEvents().length;
+          announceToScreenReader(`${count} ${count === 1 ? 'event' : 'events'} found for query "${e.target.value}"`, 'polite');
+        }, 600);
       };
     }
 
@@ -2229,6 +2371,8 @@
         state.categoryFilter = e.target.value;
         state.eventsCurrentPage = 1;
         render();
+        const count = getFilteredEvents().length;
+        announceToScreenReader(`Category changed to ${e.target.value}. Showing ${count} ${count === 1 ? 'event' : 'events'}.`, 'polite');
       };
     }
 
@@ -2238,6 +2382,8 @@
         state.dateFilter = e.target.value;
         state.eventsCurrentPage = 1;
         render();
+        const count = getFilteredEvents().length;
+        announceToScreenReader(`Date filter changed to ${e.target.value}. Showing ${count} ${count === 1 ? 'event' : 'events'}.`, 'polite');
       };
     }
 
@@ -2248,6 +2394,8 @@
         state.selectedDistrict = 'All Districts';
         state.eventsCurrentPage = 1;
         render();
+        const count = getFilteredEvents().length;
+        announceToScreenReader(`State changed to ${e.target.value}. Showing ${count} ${count === 1 ? 'event' : 'events'}.`, 'polite');
       };
     }
 
@@ -2257,6 +2405,8 @@
         state.selectedDistrict = e.target.value;
         state.eventsCurrentPage = 1;
         render();
+        const count = getFilteredEvents().length;
+        announceToScreenReader(`District changed to ${e.target.value}. Showing ${count} ${count === 1 ? 'event' : 'events'}.`, 'polite');
       };
     }
 
@@ -2280,16 +2430,19 @@
         state.locationFilter = 'All locations';
         state.eventsCurrentPage = 1;
         render();
+        const count = getFilteredEvents().length;
+        announceToScreenReader(`Filters reset. Showing all ${count} events.`, 'polite');
       };
     }
 
-    // W3Schools Pagination Click Handlers
+    // W3Schools Pagination Click Handlers with screen reader announcements
     document.querySelectorAll('[data-events-page]').forEach(btn => {
       btn.onclick = () => {
         const page = Number(btn.getAttribute('data-events-page'));
         if (page && page !== state.eventsCurrentPage) {
           state.eventsCurrentPage = page;
           render();
+          announceToScreenReader(`Showing events page ${page}`, 'polite');
           const target = document.querySelector('.results-heading') || document.querySelector('.event-grid');
           if (target) target.scrollIntoView({ behavior: state.reduceMotion ? 'auto' : 'smooth', block: 'start' });
         }
@@ -2302,6 +2455,7 @@
         if (page && page !== state.registrationsCurrentPage) {
           state.registrationsCurrentPage = page;
           render();
+          announceToScreenReader(`Showing registrations page ${page}`, 'polite');
           const target = document.getElementById('myRegistrationsSection');
           if (target) target.scrollIntoView({ behavior: state.reduceMotion ? 'auto' : 'smooth', block: 'start' });
         }
@@ -2314,6 +2468,7 @@
         if (page && page !== state.albumsCurrentPage) {
           state.albumsCurrentPage = page;
           render();
+          announceToScreenReader(`Showing albums page ${page}`, 'polite');
           const target = document.querySelector('.album-grid');
           if (target) target.scrollIntoView({ behavior: state.reduceMotion ? 'auto' : 'smooth', block: 'start' });
         }
@@ -2343,8 +2498,7 @@
         const today = new Date();
         state.calendarDate = new Date(today.getFullYear(), today.getMonth(), 1);
         state.selectedCalendarDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-        state.calendarModalOpen = true;
-        render();
+        openModal('calendar', 'Today Scheduled Events');
       };
     }
 
@@ -2352,62 +2506,35 @@
     document.querySelectorAll('.calendar-day[data-date]').forEach(btn => {
       btn.onclick = () => {
         state.selectedCalendarDate = btn.getAttribute('data-date');
-        state.calendarModalOpen = true;
-        render();
+        openModal('calendar', 'Scheduled Events on ' + formatDate(state.selectedCalendarDate));
       };
     });
 
     // Calendar modal actions
     const closeCalendarModalBtn = document.getElementById('closeCalendarModalBtn');
-    if (closeCalendarModalBtn) {
-      closeCalendarModalBtn.onclick = () => {
-        state.calendarModalOpen = false;
-        render();
-      };
-    }
+    if (closeCalendarModalBtn) closeCalendarModalBtn.onclick = closeModal;
 
     const btnDoneCalendarModal = document.getElementById('btnDoneCalendarModal');
-    if (btnDoneCalendarModal) {
-      btnDoneCalendarModal.onclick = () => {
-        state.calendarModalOpen = false;
-        render();
-      };
-    }
+    if (btnDoneCalendarModal) btnDoneCalendarModal.onclick = closeModal;
 
     const calendarModalBackdrop = document.getElementById('calendarModalBackdrop');
     if (calendarModalBackdrop) {
       calendarModalBackdrop.onmousedown = (e) => {
-        if (e.target === calendarModalBackdrop) {
-          state.calendarModalOpen = false;
-          render();
-        }
+        if (e.target === calendarModalBackdrop) closeModal();
       };
     }
 
     // Locations modal triggers
     const openLocModalBtn = document.getElementById('openLocationModalBtn');
-    if (openLocModalBtn) {
-      openLocModalBtn.onclick = () => {
-        state.locationModalOpen = true;
-        render();
-      };
-    }
+    if (openLocModalBtn) openLocModalBtn.onclick = () => openModal('location', 'Event locations');
 
     const closeLocModalBtn = document.getElementById('closeLocModalBtn');
-    if (closeLocModalBtn) {
-      closeLocModalBtn.onclick = () => {
-        state.locationModalOpen = false;
-        render();
-      };
-    }
+    if (closeLocModalBtn) closeLocModalBtn.onclick = closeModal;
 
     const locBackdrop = document.getElementById('locationModalBackdrop');
     if (locBackdrop) {
       locBackdrop.onmousedown = (e) => {
-        if (e.target === locBackdrop) {
-          state.locationModalOpen = false;
-          render();
-        }
+        if (e.target === locBackdrop) closeModal();
       };
     }
 
@@ -2552,8 +2679,7 @@
         const reg = all.find(r => String(r.id) === String(regId));
         if (reg) {
           state.activeTicket = reg;
-          state.ticketModalOpen = true;
-          render();
+          openModal('ticket', 'Registration Pass');
         }
       };
     });
@@ -2586,18 +2712,15 @@
 
     // Ticket Pass modal actions
     const closeTicketModalBtn = document.getElementById('closeTicketModalBtn');
-    if (closeTicketModalBtn) closeTicketModalBtn.onclick = () => { state.ticketModalOpen = false; render(); };
+    if (closeTicketModalBtn) closeTicketModalBtn.onclick = closeModal;
 
     const btnClosePass = document.getElementById('btnClosePass');
-    if (btnClosePass) btnClosePass.onclick = () => { state.ticketModalOpen = false; render(); };
+    if (btnClosePass) btnClosePass.onclick = closeModal;
 
     const ticketModalBackdrop = document.getElementById('ticketModalBackdrop');
     if (ticketModalBackdrop) {
       ticketModalBackdrop.onmousedown = (e) => {
-        if (e.target === ticketModalBackdrop) {
-          state.ticketModalOpen = false;
-          render();
-        }
+        if (e.target === ticketModalBackdrop) closeModal();
       };
     }
 
@@ -2610,18 +2733,15 @@
 
     // Help modal actions
     const closeHelpModalBtn = document.getElementById('closeHelpModalBtn');
-    if (closeHelpModalBtn) closeHelpModalBtn.onclick = () => { state.helpModalOpen = false; render(); };
+    if (closeHelpModalBtn) closeHelpModalBtn.onclick = closeModal;
 
     const btnCancelHelpForm = document.getElementById('btnCancelHelpForm');
-    if (btnCancelHelpForm) btnCancelHelpForm.onclick = () => { state.helpModalOpen = false; render(); };
+    if (btnCancelHelpForm) btnCancelHelpForm.onclick = closeModal;
 
     const helpModalBackdrop = document.getElementById('helpModalBackdrop');
     if (helpModalBackdrop) {
       helpModalBackdrop.onmousedown = (e) => {
-        if (e.target === helpModalBackdrop) {
-          state.helpModalOpen = false;
-          render();
-        }
+        if (e.target === helpModalBackdrop) closeModal();
       };
     }
 
@@ -2638,33 +2758,29 @@
       helpInquiryForm.onsubmit = (e) => {
         e.preventDefault();
         showToast('Message sent! Support team will reply within 24h.', icons.circleCheck);
-        state.helpModalOpen = false;
-        render();
+        closeModal();
       };
     }
 
     // Profile modal actions
     const closeProfileModalBtn = document.getElementById('closeProfileModalBtn');
-    if (closeProfileModalBtn) closeProfileModalBtn.onclick = () => { state.profileModalOpen = false; render(); };
+    if (closeProfileModalBtn) closeProfileModalBtn.onclick = closeModal;
 
     const btnDoneProfile = document.getElementById('btnDoneProfile');
-    if (btnDoneProfile) btnDoneProfile.onclick = () => { state.profileModalOpen = false; render(); };
+    if (btnDoneProfile) btnDoneProfile.onclick = closeModal;
 
     const profileModalBackdrop = document.getElementById('profileModalBackdrop');
     if (profileModalBackdrop) {
       profileModalBackdrop.onmousedown = (e) => {
-        if (e.target === profileModalBackdrop) {
-          state.profileModalOpen = false;
-          render();
-        }
+        if (e.target === profileModalBackdrop) closeModal();
       };
     }
 
     const btnProfileMyReg = document.getElementById('btnProfileMyReg');
-    if (btnProfileMyReg) btnProfileMyReg.onclick = () => { state.profileModalOpen = false; navigate('registrations'); };
+    if (btnProfileMyReg) btnProfileMyReg.onclick = () => { closeModal(); navigate('registrations'); };
 
     const btnProfileA11y = document.getElementById('btnProfileA11y');
-    if (btnProfileA11y) btnProfileA11y.onclick = () => { state.profileModalOpen = false; state.a11yOpen = true; render(); };
+    if (btnProfileA11y) btnProfileA11y.onclick = () => { closeModal(); openModal('a11y', 'Accessibility settings'); };
 
     const btnLogoutUser = document.getElementById('btnLogoutUser');
     if (btnLogoutUser) {
@@ -2677,27 +2793,24 @@
 
     // Legal modal actions
     const closeLegalModalBtn = document.getElementById('closeLegalModalBtn');
-    if (closeLegalModalBtn) closeLegalModalBtn.onclick = () => { state.legalModal = null; render(); };
+    if (closeLegalModalBtn) closeLegalModalBtn.onclick = closeModal;
 
     const btnUnderstoodLegal = document.getElementById('btnUnderstoodLegal');
-    if (btnUnderstoodLegal) btnUnderstoodLegal.onclick = () => { state.legalModal = null; render(); };
+    if (btnUnderstoodLegal) btnUnderstoodLegal.onclick = closeModal;
 
     const legalModalBackdrop = document.getElementById('legalModalBackdrop');
     if (legalModalBackdrop) {
       legalModalBackdrop.onmousedown = (e) => {
-        if (e.target === legalModalBackdrop) {
-          state.legalModal = null;
-          render();
-        }
+        if (e.target === legalModalBackdrop) closeModal();
       };
     }
 
     // A11y Panel controls
     const a11yScrim = document.getElementById('a11yScrim');
-    if (a11yScrim) a11yScrim.onclick = (e) => { e.preventDefault(); toggleA11y(false); };
+    if (a11yScrim) a11yScrim.onclick = (e) => { e.preventDefault(); closeModal(); };
 
     const closeA11yBtn = document.getElementById('closeA11yBtn');
-    if (closeA11yBtn) closeA11yBtn.onclick = (e) => { e.preventDefault(); toggleA11y(false); };
+    if (closeA11yBtn) closeA11yBtn.onclick = (e) => { e.preventDefault(); closeModal(); };
 
     const textSizeDecBtn = document.getElementById('textSizeDecBtn');
     if (textSizeDecBtn) {
@@ -2802,35 +2915,21 @@
           state.feedbackRating = 5;
           state.feedbackAnswers = {};
           state.feedbackComments = '';
-          state.feedbackModalOpen = true;
-          render();
+          openModal('feedback', 'Attendee Feedback');
         }
       };
     });
 
     const closeFeedbackModalBtn = document.getElementById('closeFeedbackModalBtn');
-    if (closeFeedbackModalBtn) {
-      closeFeedbackModalBtn.onclick = () => {
-        state.feedbackModalOpen = false;
-        render();
-      };
-    }
+    if (closeFeedbackModalBtn) closeFeedbackModalBtn.onclick = closeModal;
 
     const btnCancelFeedback = document.getElementById('btnCancelFeedback');
-    if (btnCancelFeedback) {
-      btnCancelFeedback.onclick = () => {
-        state.feedbackModalOpen = false;
-        render();
-      };
-    }
+    if (btnCancelFeedback) btnCancelFeedback.onclick = closeModal;
 
     const feedbackModalBackdrop = document.getElementById('feedbackModalBackdrop');
     if (feedbackModalBackdrop) {
       feedbackModalBackdrop.onmousedown = (e) => {
-        if (e.target === feedbackModalBackdrop) {
-          state.feedbackModalOpen = false;
-          render();
-        }
+        if (e.target === feedbackModalBackdrop) closeModal();
       };
     }
 
@@ -2924,8 +3023,7 @@
         }
 
         showToast('Thank you! Your feedback has been received and shared with organizers.', icons.circleCheck);
-        state.feedbackModalOpen = false;
-        render();
+        closeModal();
       };
     }
 
@@ -2946,51 +3044,62 @@
     });
   }
 
-  // Keyboard accessibility
+  // Keyboard accessibility & Focus Trap for Windows Narrator / Screen Readers
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      if (state.calendarModalOpen) {
-        state.calendarModalOpen = false;
-        render();
-      } else if (state.feedbackModalOpen) {
-        state.feedbackModalOpen = false;
-        render();
-      } else if (state.ticketModalOpen) {
-        state.ticketModalOpen = false;
-        render();
-      } else if (state.helpModalOpen) {
-        state.helpModalOpen = false;
-        render();
-      } else if (state.profileModalOpen) {
-        state.profileModalOpen = false;
-        render();
-      } else if (state.legalModal) {
-        state.legalModal = null;
-        render();
-      } else if (state.locationModalOpen) {
-        state.locationModalOpen = false;
-        render();
-      } else if (state.a11yOpen) {
-        state.a11yOpen = false;
-        render();
+      closeModal();
+      return;
+    }
+
+    if (e.key === 'Tab') {
+      const activeModal = document.querySelector('.modal-backdrop [role="dialog"], .location-modal, .a11y-panel[role="dialog"]');
+      const isAnyModalOpen = state.calendarModalOpen || state.helpModalOpen || state.profileModalOpen ||
+                             state.ticketModalOpen || state.feedbackModalOpen || state.locationModalOpen ||
+                             state.legalModal || state.a11yOpen;
+
+      if (activeModal && isAnyModalOpen) {
+        const focusables = Array.from(activeModal.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+        if (focusables.length > 0) {
+          const first = focusables[0];
+          const last = focusables[focusables.length - 1];
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
       }
     }
   });
 
   function toggleA11y(force) {
     if (typeof force === 'boolean') {
-      state.a11yOpen = force;
+      if (force) openModal('a11y', 'Accessibility settings');
+      else closeModal();
     } else {
-      state.a11yOpen = !state.a11yOpen;
+      if (state.a11yOpen) closeModal();
+      else openModal('a11y', 'Accessibility settings');
     }
-    state.mobileMenuOpen = false;
-    render();
   }
   window.toggleA11yPanel = toggleA11y;
 
   // Initialization & sync with backend store
   document.addEventListener('DOMContentLoaded', async () => {
     handleRoute();
+
+    // Initial page load focus & screen reader announcement (Windows Narrator / NVDA / JAWS)
+    setTimeout(() => {
+      const heading = document.querySelector('#main-content h1, main h1');
+      if (heading) {
+        heading.setAttribute('tabindex', '-1');
+        heading.focus({ preventScroll: true });
+      }
+      if (typeof announceToScreenReader === 'function') {
+        announceToScreenReader('Welcome to ServeDeServe Event Portal. Press Caps Lock plus R to read continuously, or use Arrow keys to browse.', 'polite');
+      }
+    }, 200);
     try {
       const res = await fetch('/api/events');
       if (res.ok) {

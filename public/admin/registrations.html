@@ -26,9 +26,10 @@
     const preselectedEventId = urlParams.get('eventId') || 'all';
 
     document.getElementById('app').innerHTML = `
+      <a class="skip-link sr-only-focusable" href="#main">Skip to main content</a>
       <div class="admin-shell">
         ${renderAdminSidebar('registrations')}
-        <main class="admin-content" id="main">
+        <main class="admin-content" id="main" tabindex="-1">
           <div class="page-heading-row" style="margin-bottom:24px;">
             <div>
               <p class="eyebrow" style="color:var(--primary);font-weight:700;font-size:0.85rem;text-transform:uppercase;">Registration Records</p>
@@ -95,6 +96,8 @@
         <div id="modalBody" style="margin-top:20px;"></div>
       </aside>
 
+      <div id="sr-announcer" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+      <div id="sr-assertive" class="sr-only" role="alert" aria-live="assertive" aria-atomic="true"></div>
       ${renderA11yPanel()}
     `;
 
@@ -186,6 +189,7 @@
     function changeRegPage(page) {
       currentRegPage = page;
       renderRegistrationsTable(currentlyFilteredRegs);
+      announceToScreenReader(`Showing registrations page ${page}`, 'polite');
       const tableWrap = document.querySelector('.table-wrap');
       if (tableWrap) tableWrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
@@ -208,6 +212,7 @@
 
       currentRegPage = 1;
       renderRegistrationsTable(filtered);
+      announceToScreenReader(`${filtered.length} ${filtered.length === 1 ? 'record' : 'records'} found.`, 'polite');
     }
 
     async function updateRegStatus(id, newStatus) {
@@ -270,8 +275,13 @@
 
       const modal = document.getElementById('detailModal');
       const backdrop = document.getElementById('detailModalBackdrop');
-      if (modal) modal.style.display = 'flex';
+      if (modal) {
+        modal.style.display = 'flex';
+        modal.setAttribute('tabindex', '-1');
+        modal.focus();
+      }
       if (backdrop) backdrop.style.display = 'block';
+      announceToScreenReader('Attendee record details dialog opened. Press Escape to close.', 'polite');
     }
 
     function closeModal() {
@@ -279,7 +289,12 @@
       const backdrop = document.getElementById('detailModalBackdrop');
       if (modal) modal.style.display = 'none';
       if (backdrop) backdrop.style.display = 'none';
+      announceToScreenReader('Dialog closed.', 'polite');
     }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModal();
+    });
 
     function exportCSV() {
       if (allRegistrations.length === 0) return alert('No registrations to export');
@@ -307,6 +322,16 @@
     }
 
     loadData();
+    setTimeout(() => {
+      const heading = document.querySelector('h1');
+      if (heading) {
+        heading.setAttribute('tabindex', '-1');
+        heading.focus();
+      }
+      if (typeof announceToScreenReader === 'function') {
+        announceToScreenReader('Attendee Registration Records management loaded.', 'polite');
+      }
+    }, 200);
   </script>
 </body>
 </html>

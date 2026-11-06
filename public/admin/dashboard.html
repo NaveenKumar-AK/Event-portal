@@ -16,9 +16,10 @@
     }
 
     document.getElementById('app').innerHTML = `
+      <a class="skip-link sr-only-focusable" href="#main">Skip to main content</a>
       <div class="admin-shell">
         ${renderAdminSidebar('dashboard')}
-        <main class="admin-content" id="main">
+        <main class="admin-content" id="main" tabindex="-1">
           <div class="page-heading-row" style="margin-bottom:24px;">
             <div>
               <p class="eyebrow" style="color:var(--primary);font-weight:700;font-size:0.85rem;text-transform:uppercase;">Overview</p>
@@ -115,6 +116,8 @@
           </div>
         </main>
       </div>
+      <div id="sr-announcer" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+      <div id="sr-assertive" class="sr-only" role="alert" aria-live="assertive" aria-atomic="true"></div>
       ${renderA11yPanel()}
     `;
 
@@ -212,6 +215,16 @@
     }
 
     loadDashboard();
+    setTimeout(() => {
+      const heading = document.querySelector('h1');
+      if (heading) {
+        heading.setAttribute('tabindex', '-1');
+        heading.focus();
+      }
+      if (typeof announceToScreenReader === 'function') {
+        announceToScreenReader('Welcome to Administrator Dashboard. Overview of events and registrations.', 'polite');
+      }
+    }, 200);
   </script>
 </body>
 </html>

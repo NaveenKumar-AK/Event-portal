@@ -18,9 +18,10 @@
     }
 
     document.getElementById('app').innerHTML = `
+      <a class="skip-link sr-only-focusable" href="#main">Skip to main content</a>
       <div class="admin-shell">
         ${renderAdminSidebar('create')}
-        <main class="admin-content" id="main">
+        <main class="admin-content" id="main" tabindex="-1">
           <div class="page-heading-row" style="margin-bottom:24px;">
             <div>
               <p class="eyebrow" style="color:var(--primary);font-weight:700;font-size:0.85rem;text-transform:uppercase;">Administration</p>
@@ -241,6 +242,8 @@
           </div>
         </main>
       </div>
+      <div id="sr-announcer" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+      <div id="sr-assertive" class="sr-only" role="alert" aria-live="assertive" aria-atomic="true"></div>
       ${renderA11yPanel()}
     `;
 
@@ -518,9 +521,6 @@
           lng: parseFloat(document.getElementById('pinnedLng').value) || 80.2707
         }
       };
-          lng: parseFloat(document.getElementById('pinnedLng').value) || 80.2707
-        }
-      };
 
       const res = await api('/api/admin/events', {
         method: 'POST',
@@ -532,6 +532,7 @@
         alertBox.style.background = '#f0fdf4';
         alertBox.style.color = 'var(--success)';
         alertBox.textContent = '🎉 Event created successfully! Redirecting to events list...';
+        announceToScreenReader('Event created successfully! Redirecting to events list.', 'assertive');
         setTimeout(() => {
           window.location.href = '/admin/events';
         }, 1500);
@@ -540,10 +541,22 @@
         alertBox.style.background = '#fef2f2';
         alertBox.style.color = 'var(--error)';
         alertBox.textContent = res.message || 'Failed to create event. Please check inputs.';
+        announceToScreenReader(res.message || 'Failed to create event. Please check inputs.', 'assertive');
         btn.disabled = false;
         btn.innerHTML = icons.check + ' Publish Event';
       }
     }
+
+    setTimeout(() => {
+      const heading = document.querySelector('h1');
+      if (heading) {
+        heading.setAttribute('tabindex', '-1');
+        heading.focus();
+      }
+      if (typeof announceToScreenReader === 'function') {
+        announceToScreenReader('Create New Accessible Event form.', 'polite');
+      }
+    }, 200);
   </script>
 </body>
 </html>

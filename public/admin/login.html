@@ -8,18 +8,20 @@
   <link rel="stylesheet" href="/css/style.css">
   <style>
     html, body {
-      height: 100vh;
-      overflow: hidden;
+      min-height: 100vh;
+      overflow-x: hidden;
+      overflow-y: auto;
       margin: 0;
       padding: 0;
     }
     .admin-login-shell {
-      height: 100vh;
+      min-height: 100vh;
       display: grid;
       place-items: center;
       background: radial-gradient(circle at 15% 15%, #f5f3ff 0%, #faf5ff 40%, #fdf4ff 100%);
-      padding: 16px;
-      overflow: hidden;
+      padding: 24px 16px;
+      overflow-x: hidden;
+      overflow-y: auto;
     }
     .admin-login-card {
       width: min(100%, 460px);
@@ -82,9 +84,10 @@
 
     function renderAdminLoginPage() {
       document.getElementById('app').innerHTML = `
-        <div class="admin-login-shell">
+        <a class="skip-link sr-only-focusable" href="#main">Skip to main content</a>
+        <main class="admin-login-shell" id="main" role="main" tabindex="-1">
           <div class="admin-login-card">
-            <div class="login-icon" style="background:#ede9fe;color:var(--primary);margin:0 auto 16px;">
+            <div class="login-icon" style="background:#ede9fe;color:var(--primary);margin:0 auto 16px;" aria-hidden="true">
               ${icons.lock}
             </div>
             <div class="inst-badge">
@@ -97,29 +100,29 @@
                 Create and register your administrator password. Your password will be securely encrypted with <strong>BCrypt</strong>.
               </p>
 
-              <div class="setup-banner">
+              <div class="setup-banner" role="note">
                 <strong>First-time access:</strong> Since no password was previously assigned, enter your administrator email and set your new secret password below.
               </div>
 
-              <form onsubmit="handleAdminSetup(event)" autocomplete="off">
+              <form onsubmit="handleAdminSetup(event)" autocomplete="off" aria-label="First-time administrator setup form">
                 <div class="field" style="margin-bottom:14px;text-align:left;">
-                  <label for="setupEmail">Administrator Email <span style="color:var(--error);">*</span></label>
-                  <input type="email" id="setupEmail" required placeholder="admin@servedeserve.org" autocomplete="off">
+                  <label for="setupEmail">Administrator Email <span style="color:var(--error);" aria-hidden="true">*</span></label>
+                  <input type="email" id="setupEmail" required aria-required="true" placeholder="admin@servedeserve.org" autocomplete="email">
                 </div>
                 <div class="field" style="margin-bottom:14px;text-align:left;">
                   <label for="setupName">Administrator Name <span style="font-weight:400;color:var(--muted);">(Optional)</span></label>
-                  <input type="text" id="setupName" placeholder="e.g. Lead Coordinator" autocomplete="off">
+                  <input type="text" id="setupName" placeholder="e.g. Lead Coordinator" autocomplete="name">
                 </div>
                 <div class="field" style="margin-bottom:14px;text-align:left;">
-                  <label for="setupPassword">Create Master Password <span style="color:var(--error);">*</span></label>
-                  <input type="password" id="setupPassword" required minlength="6" placeholder="At least 6 characters" autocomplete="new-password">
+                  <label for="setupPassword">Create Master Password <span style="color:var(--error);" aria-hidden="true">*</span></label>
+                  <input type="password" id="setupPassword" required aria-required="true" minlength="6" placeholder="At least 6 characters" autocomplete="new-password">
                 </div>
                 <div class="field" style="margin-bottom:22px;text-align:left;">
-                  <label for="setupConfirm">Confirm Password <span style="color:var(--error);">*</span></label>
-                  <input type="password" id="setupConfirm" required minlength="6" placeholder="Re-enter password" autocomplete="new-password">
+                  <label for="setupConfirm">Confirm Password <span style="color:var(--error);" aria-hidden="true">*</span></label>
+                  <input type="password" id="setupConfirm" required aria-required="true" minlength="6" placeholder="Re-enter password" autocomplete="new-password">
                 </div>
 
-                <button type="submit" class="button button--primary" id="setupBtn" style="width:100%;font-size:1.05rem;">
+                <button type="submit" class="button button--primary" id="setupBtn" style="width:100%;font-size:1.05rem;" aria-label="Set Password and Enter Admin Portal">
                   ${icons.check} Set Password &amp; Enter Admin Portal
                 </button>
               </form>
@@ -135,22 +138,22 @@
                   <strong style="color:var(--primary);font-size:0.88rem;display:block;">Pre-seeded Administrator Credentials:</strong>
                   <span style="font-size:0.84rem;color:var(--text-2);">admin@servedeserve.org · admin123</span>
                 </div>
-                <button type="button" onclick="fillDemoAndSubmit()" class="button button--secondary" style="font-size:0.8rem;padding:6px 14px;white-space:nowrap;font-weight:700;background:#fff;color:var(--primary);border-color:#c084fc;">
+                <button type="button" onclick="fillDemoAndSubmit()" class="button button--secondary" style="font-size:0.8rem;padding:6px 14px;white-space:nowrap;font-weight:700;background:#fff;color:var(--primary);border-color:#c084fc;" aria-label="Auto-fill credentials and sign in">
                   ⚡ Auto Sign In
                 </button>
               </div>
 
-              <form onsubmit="handleAdminLogin(event)" id="loginForm" autocomplete="off">
+              <form onsubmit="handleAdminLogin(event)" id="loginForm" autocomplete="off" aria-label="Administrator login form">
                 <div class="field" style="margin-bottom:14px;text-align:left;">
-                  <label for="loginEmail">Administrator Email <span style="color:var(--error);">*</span></label>
-                  <input type="email" id="loginEmail" required placeholder="admin@servedeserve.org" value="admin@servedeserve.org" autocomplete="off">
+                  <label for="loginEmail">Administrator Email <span style="color:var(--error);" aria-hidden="true">*</span></label>
+                  <input type="email" id="loginEmail" required aria-required="true" placeholder="admin@servedeserve.org" value="admin@servedeserve.org" autocomplete="email">
                 </div>
                 <div class="field" style="margin-bottom:20px;text-align:left;">
-                  <label for="loginPassword">Password <span style="color:var(--error);">*</span></label>
-                  <input type="password" id="loginPassword" required placeholder="admin123" value="admin123" autocomplete="current-password">
+                  <label for="loginPassword">Password <span style="color:var(--error);" aria-hidden="true">*</span></label>
+                  <input type="password" id="loginPassword" required aria-required="true" placeholder="admin123" value="admin123" autocomplete="current-password">
                 </div>
 
-                <button type="submit" class="button button--primary" id="loginBtn" style="width:100%;font-size:1.05rem;">
+                <button type="submit" class="button button--primary" id="loginBtn" style="width:100%;font-size:1.05rem;" aria-label="Sign in as Administrator">
                   ${icons.lock} Sign In as Administrator
                 </button>
               </form>
@@ -162,7 +165,7 @@
               </div>
             `}
 
-            <div id="alertBox" style="display:none;padding:12px;border-radius:8px;margin-top:16px;font-size:0.9rem;text-align:left;"></div>
+            <div id="alertBox" style="display:none;padding:12px;border-radius:8px;margin-top:16px;font-size:0.9rem;text-align:left;" role="alert"></div>
 
             <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);text-align:center;">
               <a href="/login" class="text-link" style="color:var(--muted);font-size:0.85rem;text-decoration:none;">
@@ -170,9 +173,21 @@
               </a>
             </div>
           </div>
-        </div>
+        </main>
+        <div id="sr-announcer" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
         ${renderA11yPanel()}
       `;
+
+      setTimeout(() => {
+        const heading = document.querySelector('h1');
+        if (heading) {
+          heading.setAttribute('tabindex', '-1');
+          heading.focus();
+        }
+        if (typeof announceToScreenReader === 'function') {
+          announceToScreenReader(`Administrator portal. ${isSetupMode ? 'First-Time Admin Setup' : 'Institutional Sign In'}`, 'polite');
+        }
+      }, 150);
     }
 
     async function handleAdminSetup(e) {

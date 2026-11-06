@@ -8,26 +8,28 @@
   <link rel="stylesheet" href="/css/style.css">
   <style>
     html, body {
-      height: 100vh;
-      max-height: 100vh;
-      overflow: hidden;
+      min-height: 100vh;
+      overflow-x: hidden;
+      overflow-y: auto;
       margin: 0;
       padding: 0;
     }
     #app {
-      height: 100vh;
+      min-height: 100vh;
       display: flex;
       flex-direction: column;
-      overflow: hidden;
+      overflow-x: hidden;
+      overflow-y: auto;
     }
     .login-page-main {
       flex: 1;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 0 16px;
+      padding: 24px 16px;
       background: radial-gradient(circle at 15% 15%, #f5f3ff 0%, #faf5ff 40%, #fdf4ff 100%);
-      overflow: hidden;
+      overflow-x: hidden;
+      overflow-y: auto;
     }
     .login-card-compact {
       width: min(100%, 415px);
@@ -117,11 +119,12 @@
   <script>
     function renderLoginPage() {
       document.getElementById('app').innerHTML = `
+        <a class="skip-link sr-only-focusable" href="#main">Skip to main content</a>
         ${renderHeader('login')}
-        <main class="login-page-main" id="main">
+        <main class="login-page-main" id="main" role="main" tabindex="-1">
           <div class="login-card-compact">
             
-            <div class="login-icon-compact">
+            <div class="login-icon-compact" aria-hidden="true">
               ${icons.userRound}
             </div>
             <div class="portal-badge">COMMUNITY PARTICIPANT</div>
@@ -130,27 +133,28 @@
               Explore accessible community events, view galleries, and track registrations.
             </p>
 
-            <form onsubmit="handleUserLogin(event)" class="login-form-compact" autocomplete="off">
+            <form onsubmit="handleUserLogin(event)" class="login-form-compact" autocomplete="off" aria-label="Participant sign-in form">
               <div class="field">
-                <label for="userName">Full Name <span style="color:var(--error);">*</span></label>
-                <input type="text" id="userName" required placeholder="Enter your full name" autocomplete="off">
+                <label for="userName">Full Name <span style="color:var(--error);" aria-hidden="true">*</span></label>
+                <input type="text" id="userName" required aria-required="true" placeholder="Enter your full name" autocomplete="name">
               </div>
               <div class="field">
-                <label for="userEmail">Email Address <span style="color:var(--error);">*</span></label>
-                <input type="email" id="userEmail" required placeholder="your.name@example.com" autocomplete="off">
+                <label for="userEmail">Email Address <span style="color:var(--error);" aria-hidden="true">*</span></label>
+                <input type="email" id="userEmail" required aria-required="true" placeholder="your.name@example.com" autocomplete="email">
               </div>
               <div class="field">
                 <label for="userDept">Community Role / Organization <span style="font-weight:400;color:var(--muted);">(Optional)</span></label>
-                <input type="text" id="userDept" placeholder="e.g. Volunteer, Student, Resident" autocomplete="off">
+                <input type="text" id="userDept" placeholder="e.g. Volunteer, Student, Resident" autocomplete="organization">
               </div>
 
-              <button type="submit" class="button button--primary login-btn-compact">
+              <button type="submit" class="button button--primary login-btn-compact" aria-label="Enter Event Portal">
                 <span>Enter Event Portal</span> ${icons.arrowRight}
               </button>
             </form>
 
           </div>
         </main>
+        <div id="sr-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
         ${renderA11yPanel()}
       `;
     }
@@ -174,6 +178,16 @@
     }
 
     renderLoginPage();
+    setTimeout(() => {
+      const heading = document.querySelector('h1');
+      if (heading) {
+        heading.setAttribute('tabindex', '-1');
+        heading.focus();
+      }
+      if (typeof announceToScreenReader === 'function') {
+        announceToScreenReader('Welcome to ServeDeServe sign-in. Press Tab to enter name and email, or press Caps Lock plus R to read continuously.', 'polite');
+      }
+    }, 150);
   </script>
 </body>
 </html>

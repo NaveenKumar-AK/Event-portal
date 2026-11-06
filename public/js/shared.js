@@ -584,8 +584,10 @@ function renderA11yPanel() {
   const reduceMotion = localStorage.getItem('sds-motion') === 'true';
 
   return `
+    <div id="sr-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+    <div id="sr-assertive" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
     <button class="scrim" id="a11yScrim" onclick="toggleA11yPanel()" aria-label="Close panel" style="display:none;"></button>
-    <aside class="a11y-panel" id="a11yPanel" role="dialog" aria-label="Accessibility settings" style="display:none;">
+    <aside class="a11y-panel" id="a11yPanel" role="dialog" aria-modal="true" aria-label="Accessibility settings" tabindex="-1" style="display:none;">
       <div class="panel-heading">
         <div>
           <p class="eyebrow">Your preferences</p>
@@ -625,9 +627,10 @@ function renderA11yPanel() {
           <span id="sharedMotionLabel">${reduceMotion ? 'On' : 'Off'}</span>
         </button>
       </div>
-      <button class="button button--secondary" onclick="resetA11y()" style="width:100%;margin-top:24px;">Reset all settings</button>
+
+      <button class="button button--secondary" onclick="resetA11y()" style="width:100%;margin-top:20px;">Reset all settings</button>
       <p class="panel-note">
-        ${icons.shieldCheck} Preferences are saved on this device.
+        ${icons.shieldCheck} Preferences are saved on this device. Fully compatible with Windows Narrator, NVDA, and JAWS.
       </p>
     </aside>
   `;
@@ -666,26 +669,31 @@ function renderAdminSidebar(activeItem = 'dashboard') {
       </a>
       <p class="eyebrow" style="margin-bottom:12px;">Portal Admin</p>
       <nav>
-        <a href="/admin" class="${activeItem === 'dashboard' ? 'active' : ''}">
+        <a href="/admin" class="${activeItem === 'dashboard' ? 'active' : ''}" ${activeItem === 'dashboard' ? 'aria-current="page"' : ''}>
           ${icons.barChart} Dashboard
         </a>
-        <a href="/admin/events" class="${(activeItem === 'events' || activeItem === 'create') ? 'active' : ''}">
+        <a href="/admin/events" class="${(activeItem === 'events' || activeItem === 'create') ? 'active' : ''}" ${(activeItem === 'events' || activeItem === 'create') ? 'aria-current="page"' : ''}>
           ${icons.calendar} Manage Events &amp; Gallery
         </a>
-        <a href="/admin/registrations" class="${activeItem === 'registrations' ? 'active' : ''}">
+        <a href="/admin/registrations" class="${activeItem === 'registrations' ? 'active' : ''}" ${activeItem === 'registrations' ? 'aria-current="page"' : ''}>
           ${icons.ticketCheck} Registrations
         </a>
         <a href="/events" style="margin-top:16px;">
           ${icons.arrowLeft} View User Portal
         </a>
       </nav>
+      <div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.12);display:flex;flex-direction:column;gap:8px;">
+        <button type="button" onclick="toggleA11yPanel()" class="button button--secondary" style="font-size:0.8rem;padding:7px 12px;justify-content:flex-start;background:rgba(255,255,255,0.08);color:#fff;border-color:rgba(255,255,255,0.2);" aria-label="Open Accessibility Display settings">
+          ${icons.accessibility} Accessibility
+        </button>
+      </div>
       <div class="sidebar-user">
         <span aria-hidden="true">${initials}</span>
         <div style="overflow:hidden;flex:1;min-width:0;">
           <strong style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;" title="${adminName}">${adminName}</strong>
           <small style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;" title="${adminEmail}">${adminEmail}</small>
         </div>
-        <button onclick="handleLogout()" title="Log out" style="background:none;border:none;cursor:pointer;margin-left:auto;color:inherit;opacity:0.75;padding:4px;">
+        <button onclick="handleLogout()" title="Log out" aria-label="Log out of administrator portal" style="background:none;border:none;cursor:pointer;margin-left:auto;color:inherit;opacity:0.75;padding:4px;">
           ${icons.x}
         </button>
       </div>
@@ -719,6 +727,12 @@ function toggleA11yPanel(force) {
     const next = typeof force === 'boolean' ? force : !isShowing;
     panel.style.display = next ? 'flex' : 'none';
     scrim.style.display = next ? 'block' : 'none';
+    if (next) {
+      panel.focus();
+      announceToScreenReader('Accessibility settings dialog opened. Press Escape to close.', 'polite');
+    } else {
+      announceToScreenReader('Accessibility settings dialog closed.', 'polite');
+    }
   }
 }
 
@@ -848,7 +862,27 @@ function renderW3PaginationHTML({
   `;
 }
 
-// Initialize on page load
+// ─── Screen Reader Announcer System (Windows Narrator / NVDA / JAWS / VoiceOver) ───
+function announceToScreenReader(message, priority = 'polite') {
+  if (!message || typeof document === 'undefined') return;
+  const regionId = priority === 'assertive' ? 'sr-assertive' : 'sr-announcer';
+  let region = document.getElementById(regionId);
+  if (!region) {
+    region = document.createElement('div');
+    region.id = regionId;
+    region.className = 'sr-only';
+    region.setAttribute('role', priority === 'assertive' ? 'alert' : 'status');
+    region.setAttribute('aria-live', priority);
+    region.setAttribute('aria-atomic', 'true');
+    document.body.appendChild(region);
+  }
+  region.textContent = '';
+  setTimeout(() => {
+    region.textContent = message;
+  }, 50);
+}
+
+// Initialize accessibility preferences on page load
 if (typeof document !== 'undefined') {
   document.addEventListener('DOMContentLoaded', () => {
     const size = Number(localStorage.getItem('sds-text-size')) || 100;
@@ -861,5 +895,5 @@ if (typeof document !== 'undefined') {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { icons, figmaEvents, INDIAN_LOCATIONS, renderW3PaginationHTML };
+  module.exports = { icons, figmaEvents, INDIAN_LOCATIONS, renderW3PaginationHTML, announceToScreenReader };
 }
