@@ -1,8 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
+const { isDbConnected } = require('../config/db');
 const { Event, EventFeedback } = require('../models');
-const { calculateDistanceKm, calculateETA } = require('../data/store');
+const {
+  events: storeEvents,
+  findStoreEvent,
+  calculateDistanceKm,
+  calculateETA
+} = require('../data/store');
 
 function getEventQuery(idParam) {
   const num = Number(idParam);
@@ -16,24 +22,94 @@ function getEventQuery(idParam) {
   return conditions.length > 1 ? { $or: conditions } : (conditions[0] || { id: -1 });
 }
 
+function filterStoreEvents(events, { search, category, date, city, status, state, district }) {
+  return events.filter(e => {
+    if (status && status !== 'all' && String(e.status).toLowerCase() !== String(status).toLowerCase()) return false;
+    if (category && category !== 'all' && String(e.category).toLowerCase() !== String(category).toLowerCase()) return false;
+    if (date && e.date !== date) return false;
+    if (city && city !== 'all' && String(e.city || '').toLowerCase() !== String(city).toLowerCase()) return false;
+
+    if (state && state !== 'all' && state !== 'All States') {
+      const sRe = new RegExp(state, 'i');
+      if (!sRe.test(e.state || '') && !sRe.test(e.address || '') && !sRe.test(e.location || '')) return false;
+    }
+
+    if (district && district !== 'all' && !district.startsWith('All Districts')) {
+      const dRe = new RegExp(district, 'i');
+      if (!dRe.test(e.district || '') && !dRe.test(e.city || '') && !dRe.test(e.address || '') && !dRe.test(e.location || '')) return false;
+    }
+
+    if (search) {
+      const qRe = new RegExp(search, 'i');
+      if (!qRe.test(e.title || '') && !qRe.test(e.description || '') && !qRe.test(e.venue || '') && !qRe.test(e.location || '')) return false;
+    }
+
+    return true;
+  }).sort((a, b) => (a.id || 0) - (b.id || 0));
+}
+
+function groupCalendar(events, month, year) {
+  let list = events;
+  if (month && year) {
+    list = events.filter(e => {
+      const d = new Date(e.date);
+      return d.getMonth() + 1 === parseInt(month, 10) && d.getFullYear() === parseInt(year, 10);
+    });
+  }
+  const grouped = {};
+  list.forEach(e => {
+    if (!grouped[e.date]) grouped[e.date] = [];
+    grouped[e.date].push({ id: e.id, title: e.title, time: e.time, venue: e.venue || e.location, category: e.category });
+  });
+  return grouped;
+}
+
+function formatTrackingPayload(event) {
+  const hostName = typeof event.host === 'object' ? (event.host.name || 'Presiding Host') : (event.host || 'Presiding Host');
+  const tracking = event.liveTracking || {
+    enabled: false,
+    hostName,
+    currentLocation: event.coordinates || { lat: 13.0827, lng: 80.2707 },
+    status: 'Not Started',
+    eta: '--',
+    distanceKm: 0,
+    speedKmh: 0,
+    updatedAt: new Date()
+  };
+
+  return {
+    success: true,
+    eventId: event.id,
+    eventTitle: event.title,
+    venue: {
+      name: event.venue || event.location || 'Event Venue',
+      address: event.address || '',
+      coordinates: event.coordinates || { lat: 13.0827, lng: 80.2707 }
+    },
+    host: {
+      name: hostName,
+      details: event.hostDetails || null
+    },
+    liveTracking: tracking
+  };
+}
+
 // GET /api/events — list all events, with optional filters
 router.get('/', async (req, res) => {
   try {
+    if (!isDbConnected()) {
+      const events = filterStoreEvents(storeEvents, req.query);
+      return res.json({ success: true, count: events.length, events });
+    }
+
     const { search, category, date, city, status, state, district } = req.query;
     const query = {};
 
-    if (status && status !== 'all') {
-      query.status = status;
-    }
-    if (category && category !== 'all') {
-      query.category = { $regex: new RegExp(`^${category}$`, 'i') };
-    }
-    if (date) {
-      query.date = date;
-    }
-    if (city && city !== 'all') {
-      query.city = { $regex: new RegExp(`^${city}$`, 'i') };
-    }
+    if (status && status !== 'all') query.status = status;
+    if (category && category !== 'all') query.category = { $regex: new RegExp(`^${category}$`, 'i') };
+    if (date) query.date = date;
+    if (city && city !== 'all') query.city = { $regex: new RegExp(`^${city}$`, 'i') };
+
     if (state && state !== 'all' && state !== 'All States') {
       query.$or = [
         { state: { $regex: new RegExp(state, 'i') } },
@@ -84,7 +160,9 @@ router.get('/', async (req, res) => {
 // GET /api/events/featured — featured events
 router.get('/featured', async (req, res) => {
   try {
-    const featured = await Event.find({ isFeatured: true }).lean();
+    const featured = isDbConnected()
+      ? await Event.find({ isFeatured: true }).lean()
+      : storeEvents.filter(e => e.isFeatured);
     res.json({ success: true, events: featured });
   } catch (err) {
     console.error('Error fetching featured events:', err);
@@ -95,7 +173,9 @@ router.get('/featured', async (req, res) => {
 // GET /api/events/categories — distinct categories
 router.get('/categories', async (req, res) => {
   try {
-    const cats = await Event.distinct('category');
+    const cats = isDbConnected()
+      ? await Event.distinct('category')
+      : [...new Set(storeEvents.map(e => e.category))];
     res.json({ success: true, categories: cats.filter(Boolean) });
   } catch (err) {
     console.error('Error fetching categories:', err);
@@ -107,19 +187,8 @@ router.get('/categories', async (req, res) => {
 router.get('/calendar', async (req, res) => {
   try {
     const { month, year } = req.query;
-    let events = await Event.find().lean();
-    if (month && year) {
-      events = events.filter(e => {
-        const d = new Date(e.date);
-        return d.getMonth() + 1 === parseInt(month) && d.getFullYear() === parseInt(year);
-      });
-    }
-    const grouped = {};
-    events.forEach(e => {
-      if (!grouped[e.date]) grouped[e.date] = [];
-      grouped[e.date].push({ id: e.id, title: e.title, time: e.time, venue: e.venue || e.location, category: e.category });
-    });
-    res.json({ success: true, calendar: grouped });
+    const events = isDbConnected() ? await Event.find().lean() : storeEvents;
+    res.json({ success: true, calendar: groupCalendar(events, month, year) });
   } catch (err) {
     console.error('Error fetching calendar:', err);
     res.status(500).json({ success: false, message: 'Server error' });
@@ -129,7 +198,9 @@ router.get('/calendar', async (req, res) => {
 // GET /api/events/:id — single event detail
 router.get('/:id', async (req, res) => {
   try {
-    const event = await Event.findOne(getEventQuery(req.params.id)).lean();
+    const event = isDbConnected()
+      ? await Event.findOne(getEventQuery(req.params.id)).lean()
+      : findStoreEvent(req.params.id);
     if (!event) return res.status(404).json({ success: false, message: 'Event not found' });
     res.json({ success: true, event });
   } catch (err) {
@@ -141,7 +212,9 @@ router.get('/:id', async (req, res) => {
 // GET /api/events/:id/gallery — get photos for an event
 router.get('/:id/gallery', async (req, res) => {
   try {
-    const event = await Event.findOne(getEventQuery(req.params.id)).lean();
+    const event = isDbConnected()
+      ? await Event.findOne(getEventQuery(req.params.id)).lean()
+      : findStoreEvent(req.params.id);
     if (!event) return res.status(404).json({ success: false, message: 'Event not found' });
     res.json({
       success: true,
@@ -159,7 +232,9 @@ router.get('/:id/gallery', async (req, res) => {
 // GET /api/events/:id/feedback — get feedback questions if active
 router.get('/:id/feedback', async (req, res) => {
   try {
-    const event = await Event.findOne(getEventQuery(req.params.id)).lean();
+    const event = isDbConnected()
+      ? await Event.findOne(getEventQuery(req.params.id)).lean()
+      : findStoreEvent(req.params.id);
     if (!event) return res.status(404).json({ success: false, message: 'Event not found' });
     res.json({
       success: true,
@@ -175,7 +250,9 @@ router.get('/:id/feedback', async (req, res) => {
 // POST /api/events/:id/feedback — submit user feedback
 router.post('/:id/feedback', async (req, res) => {
   try {
-    const event = await Event.findOne(getEventQuery(req.params.id));
+    const event = isDbConnected()
+      ? await Event.findOne(getEventQuery(req.params.id))
+      : findStoreEvent(req.params.id);
     if (!event) return res.status(404).json({ success: false, message: 'Event not found' });
     if (!event.feedbackActive) {
       return res.status(403).json({ success: false, message: 'Feedback is currently not active for this event' });
@@ -192,24 +269,25 @@ router.post('/:id/feedback', async (req, res) => {
       submittedAt: new Date()
     };
     event.feedbackResponses.push(submission);
-    await event.save();
 
-    // Also persist directly into Event_Feedback collection (Table 2.8)
-    try {
-      await EventFeedback.create({
-        feedback_id: Date.now(),
-        registration_id: null,
-        event_id: event.id || event.event_id,
-        user_name: submission.userName,
-        user_email: submission.userEmail,
-        rating: submission.rating,
-        comments: submission.comments,
-        answers: submission.answers,
-        is_visible: true,
-        submitted_at: submission.submittedAt
-      });
-    } catch (fbErr) {
-      console.warn('Note: EventFeedback record creation:', fbErr.message);
+    if (isDbConnected()) {
+      await event.save();
+      try {
+        await EventFeedback.create({
+          feedback_id: Date.now(),
+          registration_id: null,
+          event_id: event.id || event.event_id,
+          user_name: submission.userName,
+          user_email: submission.userEmail,
+          rating: submission.rating,
+          comments: submission.comments,
+          answers: submission.answers,
+          is_visible: true,
+          submitted_at: submission.submittedAt
+        });
+      } catch (fbErr) {
+        console.warn('Note: EventFeedback record creation:', fbErr.message);
+      }
     }
 
     res.status(201).json({ success: true, message: 'Feedback submitted successfully! Thank you.', submission });
@@ -222,36 +300,11 @@ router.post('/:id/feedback', async (req, res) => {
 // GET /api/events/:id/host-tracking — get real-time GPS tracking status of event host
 router.get('/:id/host-tracking', async (req, res) => {
   try {
-    const event = await Event.findOne(getEventQuery(req.params.id)).lean();
+    const event = isDbConnected()
+      ? await Event.findOne(getEventQuery(req.params.id)).lean()
+      : findStoreEvent(req.params.id);
     if (!event) return res.status(404).json({ success: false, message: 'Event not found' });
-
-    const hostName = typeof event.host === 'object' ? (event.host.name || 'Presiding Host') : (event.host || 'Presiding Host');
-    const tracking = event.liveTracking || {
-      enabled: false,
-      hostName,
-      currentLocation: event.coordinates || { lat: 13.0827, lng: 80.2707 },
-      status: 'Not Started',
-      eta: '--',
-      distanceKm: 0,
-      speedKmh: 0,
-      updatedAt: new Date()
-    };
-
-    res.json({
-      success: true,
-      eventId: event.id,
-      eventTitle: event.title,
-      venue: {
-        name: event.venue || event.location || 'Event Venue',
-        address: event.address || '',
-        coordinates: event.coordinates || { lat: 13.0827, lng: 80.2707 }
-      },
-      host: {
-        name: hostName,
-        details: event.hostDetails || null
-      },
-      liveTracking: tracking
-    });
+    res.json(formatTrackingPayload(event));
   } catch (err) {
     console.error('Error fetching host tracking:', err);
     res.status(500).json({ success: false, message: 'Server error' });
@@ -261,7 +314,9 @@ router.get('/:id/host-tracking', async (req, res) => {
 // POST /api/events/:id/host-tracking/update — update host coordinates
 router.post('/:id/host-tracking/update', async (req, res) => {
   try {
-    const event = await Event.findOne(getEventQuery(req.params.id));
+    const event = isDbConnected()
+      ? await Event.findOne(getEventQuery(req.params.id))
+      : findStoreEvent(req.params.id);
     if (!event) return res.status(404).json({ success: false, message: 'Event not found' });
 
     const { status, token, speed } = req.body;
@@ -286,7 +341,6 @@ router.post('/:id/host-tracking/update', async (req, res) => {
       };
     }
 
-    // Token validation if provided
     if (token && event.liveTracking.token && event.liveTracking.token !== token) {
       return res.status(403).json({ success: false, message: 'Invalid host tracking token' });
     }
@@ -296,13 +350,9 @@ router.post('/:id/host-tracking/update', async (req, res) => {
     const eta = calculateETA(distanceKm, speed && speed > 5 ? speed : 28);
 
     let computedStatus = status || event.liveTracking.status || 'En Route';
-    if (distanceKm <= 0.08) {
-      computedStatus = 'Arrived at Venue';
-    } else if (distanceKm <= 0.5) {
-      computedStatus = 'Approaching Venue';
-    } else if (computedStatus === 'Not Started' || !computedStatus) {
-      computedStatus = 'En Route';
-    }
+    if (distanceKm <= 0.08) computedStatus = 'Arrived at Venue';
+    else if (distanceKm <= 0.5) computedStatus = 'Approaching Venue';
+    else if (computedStatus === 'Not Started' || !computedStatus) computedStatus = 'En Route';
 
     event.liveTracking.currentLocation = { lat, lng };
     event.liveTracking.distanceKm = distanceKm;
@@ -311,7 +361,7 @@ router.post('/:id/host-tracking/update', async (req, res) => {
     event.liveTracking.speedKmh = Number(speed) || (computedStatus === 'Arrived at Venue' ? 0 : 25);
     event.liveTracking.updatedAt = new Date();
 
-    await event.save();
+    if (isDbConnected()) await event.save();
 
     res.json({
       success: true,

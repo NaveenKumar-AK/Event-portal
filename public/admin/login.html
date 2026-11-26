@@ -95,26 +95,26 @@
             </div>
             
             ${isSetupMode ? `
-              <h1 style="font-size:1.85rem;margin-bottom:6px;color:var(--text);">First-Time Admin Setup</h1>
+              <h1 style="font-size:1.85rem;margin-bottom:6px;color:var(--text);">Create Admin Account</h1>
               <p style="color:var(--text-2);font-size:0.92rem;margin-bottom:18px;">
-                Create and register your administrator password. Your password will be securely encrypted with <strong>BCrypt</strong>.
+                Register a new administrator account. Your password will be securely encrypted with <strong>BCrypt</strong>.
               </p>
 
               <div class="setup-banner" role="note">
-                <strong>First-time access:</strong> Since no password was previously assigned, enter your administrator email and set your new secret password below.
+                <strong>New administrator account:</strong> Enter your own email and password below to sign in. Pre-seeded demo access (<code>admin@servedeserve.org</code>) remains active.
               </div>
 
-              <form onsubmit="handleAdminSetup(event)" autocomplete="off" aria-label="First-time administrator setup form">
+              <form onsubmit="handleAdminSetup(event)" autocomplete="off" aria-label="Create administrator account form">
                 <div class="field" style="margin-bottom:14px;text-align:left;">
                   <label for="setupEmail">Administrator Email <span style="color:var(--error);" aria-hidden="true">*</span></label>
-                  <input type="email" id="setupEmail" required aria-required="true" placeholder="admin@servedeserve.org" autocomplete="email">
+                  <input type="email" id="setupEmail" required aria-required="true" placeholder="your.name@organization.org" autocomplete="email">
                 </div>
                 <div class="field" style="margin-bottom:14px;text-align:left;">
                   <label for="setupName">Administrator Name <span style="font-weight:400;color:var(--muted);">(Optional)</span></label>
                   <input type="text" id="setupName" placeholder="e.g. Lead Coordinator" autocomplete="name">
                 </div>
                 <div class="field" style="margin-bottom:14px;text-align:left;">
-                  <label for="setupPassword">Create Master Password <span style="color:var(--error);" aria-hidden="true">*</span></label>
+                  <label for="setupPassword">Create Password <span style="color:var(--error);" aria-hidden="true">*</span></label>
                   <input type="password" id="setupPassword" required aria-required="true" minlength="6" placeholder="At least 6 characters" autocomplete="new-password">
                 </div>
                 <div class="field" style="margin-bottom:22px;text-align:left;">
@@ -122,14 +122,14 @@
                   <input type="password" id="setupConfirm" required aria-required="true" minlength="6" placeholder="Re-enter password" autocomplete="new-password">
                 </div>
 
-                <button type="submit" class="button button--primary" id="setupBtn" style="width:100%;font-size:1.05rem;" aria-label="Set Password and Enter Admin Portal">
-                  ${icons.check} Set Password &amp; Enter Admin Portal
+                <button type="submit" class="button button--primary" id="setupBtn" style="width:100%;font-size:1.05rem;" aria-label="Create Account and Enter Admin Portal">
+                  ${icons.check} Create Account &amp; Enter Admin Portal
                 </button>
               </form>
 
               <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">
                 <button type="button" class="text-link" onclick="toggleMode(false)" style="background:none;border:none;cursor:pointer;color:var(--primary);font-weight:700;font-size:0.9rem;">
-                  Already have a password? Sign in instead →
+                  Already have an account? Sign in instead →
                 </button>
               </div>
             ` : `
@@ -160,7 +160,7 @@
 
               <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
                 <button type="button" class="text-link" onclick="toggleMode(true)" style="background:none;border:none;cursor:pointer;color:var(--primary);font-weight:700;font-size:0.88rem;">
-                  First time? Set administrator password →
+                  New admin? Create an administrator account →
                 </button>
               </div>
             `}
@@ -185,7 +185,7 @@
           heading.focus();
         }
         if (typeof announceToScreenReader === 'function') {
-          announceToScreenReader(`Administrator portal. ${isSetupMode ? 'First-Time Admin Setup' : 'Institutional Sign In'}`, 'polite');
+          announceToScreenReader(`Administrator portal. ${isSetupMode ? 'Create Admin Account' : 'Institutional Sign In'}`, 'polite');
         }
       }, 150);
     }
@@ -233,7 +233,7 @@
         alertBox.style.color = 'var(--error)';
         alertBox.textContent = res.message || 'Setup failed. Please check inputs.';
         btn.disabled = false;
-        btn.innerHTML = icons.check + ' Set Password & Enter Admin Portal';
+        btn.innerHTML = icons.check + ' Create Account & Enter Admin Portal';
       }
     }
 

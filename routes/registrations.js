@@ -1,7 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
+const { isDbConnected } = require('../config/db');
 const { Event } = require('../models');
+const {
+  events: storeEvents,
+  registrations: storeRegistrations,
+  findStoreEvent
+} = require('../data/store');
 
 function getEventQuery(idParam) {
   const num = Number(idParam);
@@ -15,49 +21,55 @@ function getEventQuery(idParam) {
   return conditions.length > 1 ? { $or: conditions } : (conditions[0] || { id: -1 });
 }
 
+function buildRegistrationPayload(event, { fullName, firstName, lastName, email, phone, department, organization }) {
+  const resolvedName = fullName || (firstName ? `${firstName} ${lastName || ''}`.trim() : '');
+  const cleanEmail = email.trim().toLowerCase();
+  const timestamp = Date.now().toString(36).toUpperCase();
+  const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+  const referenceId = `SDS-2026-${timestamp}-${random}`;
+
+  return {
+    registration_id: Date.now(),
+    id: 'reg-' + Date.now(),
+    event_id: event.id || event.event_id,
+    eventId: event.id || event.event_id,
+    registration_no: referenceId,
+    referenceId,
+    full_name: resolvedName,
+    fullName: resolvedName,
+    firstName: firstName || resolvedName.split(' ')[0],
+    lastName: lastName || resolvedName.split(' ').slice(1).join(' '),
+    email: cleanEmail,
+    phone: phone || '',
+    department: department || organization || '',
+    organization: department || organization || '',
+    status: 'confirmed',
+    registeredAt: new Date().toISOString(),
+    registered_at: new Date()
+  };
+}
+
 // POST /api/registrations — create a new registration
 router.post('/', async (req, res) => {
   try {
-    const { eventId, fullName, firstName, lastName, email, phone, department, organization } = req.body;
-
+    const { eventId, fullName, firstName, lastName, email } = req.body;
     const resolvedName = fullName || (firstName ? `${firstName} ${lastName || ''}`.trim() : '');
     if (!eventId || !resolvedName || !email) {
       return res.status(400).json({ success: false, message: 'Required fields: eventId, fullName, email' });
     }
 
-    const event = await Event.findOne(getEventQuery(eventId));
+    const event = isDbConnected()
+      ? await Event.findOne(getEventQuery(eventId))
+      : findStoreEvent(eventId);
     if (!event) return res.status(404).json({ success: false, message: 'Event not found' });
 
-    // Check duplicate
     const cleanEmail = email.trim().toLowerCase();
     const exists = (event.registrations || []).find(r => (r.email || '').toLowerCase() === cleanEmail);
     if (exists) {
       return res.status(400).json({ success: false, message: 'Already registered for this event' });
     }
 
-    const timestamp = Date.now().toString(36).toUpperCase();
-    const random = Math.random().toString(36).substring(2, 6).toUpperCase();
-    const referenceId = `SDS-2026-${timestamp}-${random}`;
-
-    const registration = {
-      registration_id: Date.now(),
-      id: 'reg-' + Date.now(),
-      event_id: event.id || event.event_id,
-      eventId: event.id || event.event_id,
-      registration_no: referenceId,
-      referenceId,
-      full_name: resolvedName,
-      fullName: resolvedName,
-      firstName: firstName || resolvedName.split(' ')[0],
-      lastName: lastName || resolvedName.split(' ').slice(1).join(' '),
-      email: cleanEmail,
-      phone: phone || '',
-      department: department || organization || '',
-      organization: department || organization || '',
-      status: 'confirmed',
-      registeredAt: new Date().toISOString(),
-      registered_at: new Date()
-    };
+    const registration = buildRegistrationPayload(event, req.body);
 
     if (!event.registrations) event.registrations = [];
     event.registrations.unshift(registration);
@@ -66,7 +78,21 @@ router.post('/', async (req, res) => {
     }
     event.registeredCount = (event.registeredCount || 0) + 1;
 
-    await event.save();
+    if (isDbConnected()) {
+      await event.save();
+    } else {
+      storeRegistrations.unshift({
+        id: registration.id,
+        eventId: event.id,
+        referenceId: registration.referenceId,
+        fullName: resolvedName,
+        email: cleanEmail,
+        department: registration.department,
+        phone: registration.phone,
+        status: 'Confirmed',
+        registeredAt: registration.registeredAt
+      });
+    }
 
     res.status(201).json({
       success: true,
@@ -96,9 +122,16 @@ router.get('/track/:refId', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Reference ID is required' });
     }
 
-    const event = await Event.findOne({
-      "registrations.referenceId": { $regex: new RegExp(`^${cleanRef}$`, 'i') }
-    }).lean();
+    let event = null;
+    if (isDbConnected()) {
+      event = await Event.findOne({
+        "registrations.referenceId": { $regex: new RegExp(`^${cleanRef}$`, 'i') }
+      }).lean();
+    } else {
+      event = storeEvents.find(ev =>
+        (ev.registrations || []).some(r => (r.referenceId || '').toLowerCase() === cleanRef.toLowerCase())
+      );
+    }
 
     if (!event) {
       return res.status(404).json({ success: false, message: 'Registration not found. Please check your reference ID.' });
@@ -128,7 +161,7 @@ router.get('/track/:refId', async (req, res) => {
 // GET /api/registrations — list all
 router.get('/', async (req, res) => {
   try {
-    const allEvents = await Event.find().lean();
+    const allEvents = isDbConnected() ? await Event.find().lean() : storeEvents;
     const enriched = [];
     allEvents.forEach(e => {
       (e.registrations || []).forEach(r => {

@@ -53,7 +53,7 @@ async function verify() {
   console.log(' • Embedded Registrations (2.6):', sampleEvent.registrations ? sampleEvent.registrations.length : 0, 'registration(s)');
 
   // Check Users Table (2.1)
-  const adminUser = await User.findOne({ role: 'admin' });
+  const adminUser = await User.findOne({ email: 'admin@servedeserve.org', role: 'admin' }) || await User.findOne({ role: 'admin' });
   console.log('\n--- Verifying Users Table (2.1) ---');
   console.log(' • Admin User:', adminUser.full_name, `(${adminUser.email})`);
   const isMatch = adminUser.comparePassword('admin123');

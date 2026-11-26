@@ -397,6 +397,33 @@ const locations = [
 
 const bcrypt = require('bcryptjs');
 
+// Attach initial registrations onto in-memory events to mirror MongoDB embedded Event schema
+events.forEach(ev => {
+  const evRegs = registrations
+    .filter(r => Number(r.eventId) === Number(ev.id))
+    .map((r, idx) => ({
+      registration_id: idx + 1,
+      id: r.id,
+      event_id: ev.id,
+      eventId: ev.id,
+      registration_no: r.referenceId,
+      referenceId: r.referenceId,
+      full_name: r.fullName,
+      fullName: r.fullName,
+      firstName: (r.fullName || '').split(' ')[0],
+      lastName: (r.fullName || '').split(' ').slice(1).join(' '),
+      email: r.email,
+      phone: r.phone,
+      department: r.department,
+      organization: r.department,
+      status: (r.status || 'Confirmed').toLowerCase(),
+      registeredAt: r.registeredAt,
+      registered_at: r.registeredAt ? new Date(r.registeredAt) : new Date()
+    }));
+  ev.registrations = evRegs;
+  ev.registeredCount = evRegs.length;
+});
+
 const adminUser = {
   email: 'admin@servedeserve.org',
   passwordHash: bcrypt.hashSync('admin123', 10),
@@ -405,7 +432,17 @@ const adminUser = {
   isSetupNeeded: false
 };
 
+const adminUsers = [adminUser];
+
 const adminSessions = new Set();
+
+function findStoreEvent(idParam) {
+  const num = Number(idParam);
+  return events.find(e =>
+    (!isNaN(num) && (Number(e.id) === num || Number(e.event_id) === num)) ||
+    String(e._id) === String(idParam)
+  );
+}
 
 function calculateDistanceKm(lat1, lon1, lat2, lon2) {
   if (lat1 === undefined || lon1 === undefined || lat2 === undefined || lon2 === undefined) return 0;
@@ -431,4 +468,4 @@ function calculateETA(distanceKm, averageSpeedKmh = 28) {
   return `${h}h ${m}m`;
 }
 
-module.exports = { events, registrations, locations, adminUser, adminSessions, calculateDistanceKm, calculateETA };
+module.exports = { events, registrations, locations, adminUser, adminUsers, adminSessions, findStoreEvent, calculateDistanceKm, calculateETA };
